@@ -144,9 +144,6 @@ body {
 .grow {
     Color: #00a6cc;
 }
-.p-3 {
-    padding: 0rem;
-}
 .text-lg {
     border: 1px red solid;
 }
