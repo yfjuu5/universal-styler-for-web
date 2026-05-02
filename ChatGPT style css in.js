@@ -76,7 +76,7 @@ button[data-testid="share-chat-button"]
 /* ,.group\/sidebar-expando-section:nth-child(7) */
 ,.m-4
 ,.h-0
-,.mb-2
+,.mx-3\.5
 {
     display: none !important;
 }
