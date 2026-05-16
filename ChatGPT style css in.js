@@ -822,6 +822,16 @@ p > em {
     Color: #e9c6ff;
     font-size: 20px;
 }
+.self-end {
+    align-self: center;
+}
+
+.items-start {
+    align-items: center;
+}
+.max-w-\(--user-chat-width\,70\%\) {
+    max-width: fit-content;
+}
 `;
 // State management
 const state = {
