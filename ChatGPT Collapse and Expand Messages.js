@@ -22,13 +22,15 @@
         "extract only the following specific sections",
         "Autres sections supplémentaires pour le mot",
         "pour la forme pronominale:",
-        "The lexical entry under analysis is:",
+        "The target lexical entry to analyze is:",
 "L’entrée lexicale faisant l’objet de l’analyse est :",
         "Please now proceed with the presentation of",
         "Yes, continue while strictly maintaining",
         "Oui, poursuivez en conservant",
-        "Reference Rule",
-        " 🧭 Règle de référence"
+        "inclus de section consacrée à l’explication de la forme pronominale",
+        " 🧭 Règle de référence",
+        "The phrasal verb under analysis is:",
+        "# 🧭 Reference Integrity Rule"
     ];
 
     const processedMessages = new WeakSet();
