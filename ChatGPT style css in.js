@@ -77,6 +77,7 @@ button[data-testid="share-chat-button"]
 ,.m-4
 ,.h-0
 ,.mx-3\.5
+,.h-5
 {
     display: none !important;
 }
