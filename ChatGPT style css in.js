@@ -39,7 +39,6 @@ background-color: #555; /* Darker grey on hover */
 .md\:px-Mathjax,
 .pt-5,
 .font-bold,
-.flex-1 > .rounded-lg,
 div > div:nth-child(1) > .active\:opacity-90,
 div > div:nth-child(2) > .active\:opacity-90,
 div > div:nth-child(3) > .active\:opacity-90,
@@ -78,6 +77,9 @@ button[data-testid="share-chat-button"]
 ,.h-0
 ,.mx-3\.5
 ,.h-5
+,.px-2\.5
+,.overflow-x-hidden
+,.dark\:text-blue-100:where(.dark,.dark *):not(:where(.dark .light,.dark .light *))
 {
     display: none !important;
 }
