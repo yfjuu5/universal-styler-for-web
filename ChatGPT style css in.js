@@ -78,7 +78,6 @@ button[data-testid="share-chat-button"]
 ,.mx-3\.5
 ,.h-5
 ,.px-2\.5
-,.overflow-x-hidden
 ,.dark\:text-blue-100:where(.dark,.dark *):not(:where(.dark .light,.dark .light *))
 {
     display: none !important;
