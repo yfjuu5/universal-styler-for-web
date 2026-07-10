@@ -79,6 +79,9 @@ button[data-testid="share-chat-button"]
 ,.h-5
 ,.px-2\.5
 ,.dark\:text-blue-100:where(.dark,.dark *):not(:where(.dark .light,.dark .light *))
+,#stage-slideover-sidebar > div > div > div > nav > a.group.__menu-item.hoverable.focus-within\:z-21
+,#stage-slideover-sidebar > div > div > div > nav > a:nth-child(4)
+,#stage-slideover-sidebar > div > div > div > nav > a:nth-child(6)
 {
     display: none !important;
 }
