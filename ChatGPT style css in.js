@@ -83,6 +83,7 @@ button[data-testid="share-chat-button"]
 ,#stage-slideover-sidebar > div > div > div > nav > a:nth-child(4)
 ,#stage-slideover-sidebar > div > div > div > nav > a:nth-child(6)
 ,.pb-3
+,.mt-auto
 {
     display: none !important;
 }
