@@ -17,15 +17,13 @@ const CONFIG = {
     OBSERVER_THROTTLE: 250
 };
     const USER_CSS = String.raw`
+.tall\:z-20 {
+    background-color: #d10000;
+}
 .w6asjq_TextBase {
     display: var(--text-base-display,inline);
     color: #dc8a00;
-    font-size: var(--text-base-font-size,inherit);
-    letter-spacing: var(--text-base-tracking,inherit);
-    line-height: var(--text-base-line-height,inherit);
-    border: 0;
-    margin: 0;
-    padding: 0;
+    font-size: 18px;
 }
 `;
 // State management
