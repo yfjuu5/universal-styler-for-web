@@ -17,7 +17,7 @@
         MAX_RETRIES: 50
     };
     const USER_CSS = String.raw`
-    /* Overall scrollbar dimensions */
+/* Overall scrollbar dimensions */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -146,8 +146,10 @@
     max-width: 100%;
 }
 .\@w-lg\/main\:\[--thread-content-max-width\:48rem\] {
-/*     --thread-content-max-width: 48rem; */
     border: 1px #e10000 solid;
+}
+.max-w-\(--thread-content-max-width\) {
+    max-width: -webkit-fill-available;
 }
 .S6IMGG_Divider {
     height: 2px;
@@ -214,7 +216,14 @@ textarea {
     border: 1px #ae8383 solid;
     Color:#008eff;
 }
-/*----------------------------------------*/
+#stage-slideover-sidebar
+{
+    width: 290px !important;
+    border: 1px #ad00ed solid !important;
+}
+.w-\(--sidebar-width\) {
+    width: 290px;
+}
 `;
     // State
     const state = {
