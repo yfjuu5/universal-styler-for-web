@@ -4,13 +4,11 @@
 // @version      2
 // @description  Enhanced CSS styling for Berry Browser
 // @match        https://chatgpt.com/*
-// @run-at       document-end
+// @run-at       document-start
 // @grant        none
 // ==/UserScript==
-
 (function () {
     'use strict';
-
     // Configuration
     const CONFIG = {
         STYLE_ID: 'chatgpt-enhanced-styles',
@@ -18,7 +16,6 @@
         RETRY_DELAY: 100,   // used only while waiting for <html> to exist
         MAX_RETRIES: 50
     };
-
     const USER_CSS = String.raw`
     .ms-auto.flex.shrink-0.items-center.gap-toolbar-action
 ,.-m-1
@@ -129,31 +126,19 @@
 .max-w-\(--user-chat-width\,70\%\) {
     max-width: 100%;
 }
-.\@w-lg\/main\:\[--thread-content-max-width\:48rem\] {
-/*     --thread-content-max-width: 48rem; */
-    border: 1px #e10000 solid;
-}
-.S6IMGG_Divider {
-    height: 2px;
-    padding-block: 2px;
-    background-color: #00a700;
-}
 `;
-
     // State
     const state = {
         styleElement: null,
         observer: null,
         retryCount: 0
     };
-
     const utils = {
         log(message) {
             if (!CONFIG.DEBUG_MODE) return;
             console.log(`ChatGPT Styler: ${message}`);
         }
     };
-
     // Style management
     //
     // The <style> element is a direct child of <html>, placed AFTER <head> and
@@ -181,7 +166,6 @@
             return true;
         }
     };
-
     // Observer: watches ONLY direct children of <html> (no subtree), so it is
     // cheap and does not fire during chat streaming. It fires when <body> is
     // inserted by the parser, or if something is appended after / removes our element.
@@ -203,7 +187,6 @@
             }
         }
     };
-
     // Main initialization
     const app = {
         init() {
@@ -224,7 +207,6 @@
             }
         }
     };
-
     // Start immediately (@run-at document-start). No DOMContentLoaded wait is
     // needed: the style lives on <html>, which exists from the start.
     app.init();
