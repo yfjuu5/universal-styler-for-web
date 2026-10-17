@@ -17,13 +17,113 @@ const CONFIG = {
     OBSERVER_THROTTLE: 250
 };
     const USER_CSS = String.raw`
-.tall\:z-20 {
-    background-color: #d10000;
+.ms-auto.flex.shrink-0.items-center.gap-toolbar-action
+,.touch\:p-2\.5
+,.mt-auto
+,.my-4
+,.mb-2
+,[data-testid="sidebar-item-tasks"]
+,[data-testid="plugins-button"]
+,[data-testid="sidebar-item-projects"]
+,a[href='/codex']
+,.pb-\[calc\(var\(--sidebar-section-margin-top\)-var\(--sidebar-section-first-margin-top\)\)\]
+{
+    display: none !important;
 }
 .w6asjq_TextBase {
-    display: var(--text-base-display,inline);
     color: #dc8a00;
     font-size: 18px;
+    text-align: center;
+}
+.GgxHUa_Title[data-d-size=xl]{
+    color: #e22900;
+}
+.GgxHUa_Title[data-d-size=lg]{
+    color: #e6dcd9;
+}
+.w6asjq_TextBase[data-d-default-strong]{
+    color: #ca00eb;
+}
+.w6asjq_TextBase[data-d-font-style=italic] {
+    font-style: normal;
+    Color: #1fdb00;
+}
+/*----------------------------------------*/
+:is(.overflow-auto,.overflow-scroll,.overflow-x-auto,.overflow-y-auto,.overflow-x-scroll,.overflow-y-scroll,:where(.messaging-root) .messages-scroll):hover, :is(.overflow-auto,.overflow-scroll,.overflow-x-auto,.overflow-y-auto,.overflow-x-scroll,.overflow-y-scroll,:where(.messaging-root) .messages-scroll):active {
+    scrollbar-color: #00cf00 transparent;
+}
+.overflow-auto, .overflow-scroll, .overflow-x-auto, .overflow-y-auto, .overflow-x-scroll, .overflow-y-scroll, :where(.messaging-root) .messages-scroll {
+    scrollbar-color: #c300ee transparent;
+}
+:where(.puik-root) * {
+    scrollbar-color: #fff transparent;
+    scrollbar-width: thin;
+}
+/*----------------------------------------*/
+.er4J8W_Code {
+    color: #00c7ff;
+    font-size: 18px;
+    font-weight: 600;
+}
+.prose :where(h1):not(:where([class~=not-prose],[class~=not-prose] *)), .prose :where(h1):not(:where(:where(.writing-block-typography) [class~=not-prose],:where(.writing-block-typography) [class~=not-prose] *)):where(.writing-block-typography,.writing-block-typography *) {
+    color: #e10000;
+}
+.markdown-new-styling :is(.markdown h1:where(:not(.not-markdown *))), .markdown-new-styling :is(.markdown h1:where(:not(:where(.writing-block-typography) .not-markdown *))):where(.writing-block-typography,.writing-block-typography *) {
+    margin-bottom: 2px;
+    font-size: 22px;
+    text-align: center;
+}
+.LR5Y_W_content :is(ul,ol):has(>li:first-child>p:first-child:dir(ltr)) {
+    justify-items: center;
+    Color: #00c7ff;
+}
+.prose :where(strong):not(:where([class~=not-prose],[class~=not-prose] *)), .prose :where(strong):not(:where(:where(.writing-block-typography) [class~=not-prose],:where(.writing-block-typography) [class~=not-prose] *)):where(.writing-block-typography,.writing-block-typography *) {
+    color: #e8baff;
+    font-weight: 600;
+}
+:is(.fv0XaG_DilRenderer.fv0XaG_DilResponseRoot,.fv0XaG_DilRenderer [data-d-list-item-content])>* {
+    margin-block-start: 0;
+}
+:is(.fv0XaG_DilRenderer.fv0XaG_DilResponseRoot,.fv0XaG_DilRenderer [data-d-list-item-content])>:not([data-d-component=title])+[data-d-component=title] {
+    margin-block-start: 0;
+}
+:is(.fv0XaG_DilRenderer.fv0XaG_DilResponseRoot,.fv0XaG_DilRenderer [data-d-list-item-content])>[data-d-component=text]+[data-d-component=text] {
+    margin-block-start: 0;
+}
+:is(.fv0XaG_DilRenderer.fv0XaG_DilResponseRoot,.fv0XaG_DilRenderer [data-d-list-item-content])>[data-d-component=badge][data-pill]+[data-d-component=title], :is(.fv0XaG_DilRenderer.fv0XaG_DilResponseRoot,.fv0XaG_DilRenderer [data-d-list-item-content])>[data-d-component=title]+[data-d-component=text], :is(.fv0XaG_DilRenderer.fv0XaG_DilResponseRoot,.fv0XaG_DilRenderer [data-d-list-item-content])>:is([data-d-component=title],[data-d-component=text])+[data-d-component=list] {
+    margin-block-start: 0;
+}
+.min-h-\[46px\] {
+    min-height: 40px;
+/*     align-self: center; */
+    border: 1px #00b0c1 solid;
+}
+.justify-end {
+    align-self: center;
+    border: 1px #00b0c1 solid;
+}
+.self-end {
+    align-self: center;
+    text-align: center;
+    border: 1px #dbc6c6 solid;
+}
+.user-message-bubble-color {
+    background-color: black;
+    color: #00bcff;
+    Font-size: 19px;
+    border: 1px #e10000 solid;
+}
+.px-4 {
+    padding-inline: 0;
+}
+.py-2\.5 {
+    padding-block: 1px;
+}
+.w-fit {
+    width: -webkit-fill-available;
+}
+.max-w-\(--user-chat-width\,70\%\) {
+    max-width: 100%;
 }
 `;
 // State management
