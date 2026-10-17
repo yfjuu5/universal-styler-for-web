@@ -138,48 +138,6 @@
     padding-block: 2px;
     background-color: #00a700;
 }
-.wcDTda_fallbackTextarea, .wcDTda_prosemirror-parent .ProseMirror {
-    margin-top: 0;
-    padding-bottom: 0;
-/*     font-size: var(--text-body-regular,1rem); */
-    text-align: center;
-}
-.text-token-text-primary {
-    color: #e3d5de;
-}
-.bg-transparent {
-    background-color: black;
-}
-textarea {
-    text-align: center;
-}
-.py-3 {
-    padding-block: 0;
-}
-.px-3 {
-    padding-inline: 0;
-}
-.pt-2 {
-    padding-top: 0;
-}
-.px-2 {
-    padding-inline: 3px;
-}
-.overflow-auto>*, .overflow-scroll>*, .overflow-x-auto>*, .overflow-y-auto>* {
-    scrollbar-color: auto;
-}
-.duration-150 {
-    transition-duration: unset;
-    border: 1px #e10000 solid;
-}
-.transition-opacity {
-    transition-timing-function: unset;
-    transition-duration: unset;
-}
-.__menu-item {
-    padding-inline: 0;
-    padding-block: 1px;
-}
 `;
 
     // State
