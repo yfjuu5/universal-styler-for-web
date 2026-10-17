@@ -7,10 +7,8 @@
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
-
 (function () {
     'use strict';
-
     // Configuration
     const CONFIG = {
         STYLE_ID: 'chatgpt-enhanced-styles',
@@ -18,9 +16,39 @@
         RETRY_DELAY: 100,   // used only while waiting for <html> to exist
         MAX_RETRIES: 50
     };
-
     const USER_CSS = String.raw`
-    .ms-auto.flex.shrink-0.items-center.gap-toolbar-action
+    /* 1. Standard Properties for Firefox & Modern Engines */
+html {
+  scrollbar-width: thin; /* Options: auto | thin | none */
+  scrollbar-color: #888888 #f1f1f1; /* thumb color | track color */
+}
+
+/* 2. WebKit Pseudo-elements for Chrome, Safari, and Edge */
+/* The entire scrollbar container */
+::-webkit-scrollbar {
+  width: 10px;               /* Width of vertical scrollbar */
+  height: 10px;              /* Height of horizontal scrollbar */
+}
+
+/* The background track */
+::-webkit-scrollbar-track {
+  background: #f1f1f1;       
+  border-radius: 8px;
+}
+
+/* The draggable scroll handle (thumb) */
+::-webkit-scrollbar-thumb {
+  background: #888888;       
+  border-radius: 8px;       /* Makes the scrollbar rounded */
+  border: 2px solid #f1f1f1; /* Creates padding around the thumb */
+}
+
+/* Hover effect on the draggable handle */
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;       
+}
+
+.ms-auto.flex.shrink-0.items-center.gap-toolbar-action
 ,.-m-1
 ,.mt-auto
 ,.my-4
@@ -30,6 +58,7 @@
 ,[data-testid="sidebar-item-projects"]
 ,a[href='/codex']
 ,.pb-\[calc\(var\(--sidebar-section-margin-top\)-var\(--sidebar-section-first-margin-top\)\)\]
+,.md\:bottom-\[calc\(2rem\+var\(--thread-component-gap\,0px\)\)\]
 {
     display: none !important;
 }
@@ -169,8 +198,12 @@ textarea {
     scrollbar-color: auto;
 }
 .duration-150 {
-    transition-duration: unset;
-    border: 1px #e10000 solid;
+    transition-duration: unset !important;
+    border: 1px #00a2bc solid;
+    Color:#de8100;
+}
+.duration-150:hover {
+    border: 3px #bc00f3 solid;
 }
 .transition-opacity {
     transition-timing-function: unset;
@@ -180,22 +213,33 @@ textarea {
     padding-inline: 0;
     padding-block: 1px;
 }
+.gap-2\.5 {
+    justify-content: center;
+    Font-size: 19px;
+}
+.__menu-item:not(:disabled):not([data-disabled])[data-active] {
+    border: 2px #44bf00 solid;
+}
+.mb-\(--thread-component-gap\,24px\) {
+    margin-bottom: 0;
+}
+.gap-1\.5 {
+    border: 1px #ae8383 solid;
+    Color:#008eff;
+}
 `;
-
     // State
     const state = {
         styleElement: null,
         observer: null,
         retryCount: 0
     };
-
     const utils = {
         log(message) {
             if (!CONFIG.DEBUG_MODE) return;
             console.log(`ChatGPT Styler: ${message}`);
         }
     };
-
     // Style management
     //
     // The <style> element is a direct child of <html>, placed AFTER <head> and
@@ -223,7 +267,6 @@ textarea {
             return true;
         }
     };
-
     // Observer: watches ONLY direct children of <html> (no subtree), so it is
     // cheap and does not fire during chat streaming. It fires when <body> is
     // inserted by the parser, or if something is appended after / removes our element.
@@ -245,7 +288,6 @@ textarea {
             }
         }
     };
-
     // Main initialization
     const app = {
         init() {
@@ -266,7 +308,6 @@ textarea {
             }
         }
     };
-
     // Start immediately (@run-at document-start). No DOMContentLoaded wait is
     // needed: the style lives on <html>, which exists from the start.
     app.init();
