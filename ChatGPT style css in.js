@@ -4,7 +4,7 @@
 // @version      2
 // @description  Enhanced CSS styling for Berry Browser
 // @match        https://chatgpt.com/*
-// @run-at       document-start
+// @run-at       document-end
 // @grant        none
 // ==/UserScript==
 (function () {
@@ -125,6 +125,15 @@
 }
 .max-w-\(--user-chat-width\,70\%\) {
     max-width: 100%;
+}
+.\@w-lg\/main\:\[--thread-content-max-width\:48rem\] {
+/*     --thread-content-max-width: 48rem; */
+    border: 1px #e10000 solid;
+}
+.S6IMGG_Divider {
+    height: 2px;
+    padding-block: 2px;
+    background-color: #00a700;
 }
 `;
     // State
