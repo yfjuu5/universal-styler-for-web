@@ -7,8 +7,10 @@
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
+
 (function () {
     'use strict';
+
     // Configuration
     const CONFIG = {
         STYLE_ID: 'chatgpt-enhanced-styles',
@@ -16,6 +18,7 @@
         RETRY_DELAY: 100,   // used only while waiting for <html> to exist
         MAX_RETRIES: 50
     };
+
     const USER_CSS = String.raw`
     .ms-auto.flex.shrink-0.items-center.gap-toolbar-action
 ,.-m-1
@@ -135,19 +138,64 @@
     padding-block: 2px;
     background-color: #00a700;
 }
+.wcDTda_fallbackTextarea, .wcDTda_prosemirror-parent .ProseMirror {
+    margin-top: 0;
+    padding-bottom: 0;
+/*     font-size: var(--text-body-regular,1rem); */
+    text-align: center;
+}
+.text-token-text-primary {
+    color: #e3d5de;
+}
+.bg-transparent {
+    background-color: black;
+}
+textarea {
+    text-align: center;
+}
+.py-3 {
+    padding-block: 0;
+}
+.px-3 {
+    padding-inline: 0;
+}
+.pt-2 {
+    padding-top: 0;
+}
+.px-2 {
+    padding-inline: 3px;
+}
+.overflow-auto>*, .overflow-scroll>*, .overflow-x-auto>*, .overflow-y-auto>* {
+    scrollbar-color: auto;
+}
+.duration-150 {
+    transition-duration: unset;
+    border: 1px #e10000 solid;
+}
+.transition-opacity {
+    transition-timing-function: unset;
+    transition-duration: unset;
+}
+.__menu-item {
+    padding-inline: 0;
+    padding-block: 1px;
+}
 `;
+
     // State
     const state = {
         styleElement: null,
         observer: null,
         retryCount: 0
     };
+
     const utils = {
         log(message) {
             if (!CONFIG.DEBUG_MODE) return;
             console.log(`ChatGPT Styler: ${message}`);
         }
     };
+
     // Style management
     //
     // The <style> element is a direct child of <html>, placed AFTER <head> and
@@ -175,6 +223,7 @@
             return true;
         }
     };
+
     // Observer: watches ONLY direct children of <html> (no subtree), so it is
     // cheap and does not fire during chat streaming. It fires when <body> is
     // inserted by the parser, or if something is appended after / removes our element.
@@ -196,6 +245,7 @@
             }
         }
     };
+
     // Main initialization
     const app = {
         init() {
@@ -216,6 +266,7 @@
             }
         }
     };
+
     // Start immediately (@run-at document-start). No DOMContentLoaded wait is
     // needed: the style lives on <html>, which exists from the start.
     app.init();
