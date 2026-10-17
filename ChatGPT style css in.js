@@ -1,20 +1,36 @@
-/* Overall scrollbar dimensions */
+// ==UserScript==
+// @name         ChatGPT Styler for Berry Browser updated
+// @namespace    http://yourdomain.example
+// @version      2
+// @description  Enhanced CSS styling for Berry Browser
+// @match        https://chatgpt.com/*
+// @run-at       document-end
+// @grant        none
+// ==/UserScript==
+(function () {
+    'use strict';
+    // Configuration
+    const CONFIG = {
+        STYLE_ID: 'chatgpt-enhanced-styles',
+        DEBUG_MODE: false,
+        RETRY_DELAY: 100,   // used only while waiting for <html> to exist
+        MAX_RETRIES: 50
+    };
+    const USER_CSS = String.raw`
+    /* Overall scrollbar dimensions */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 /* Scrollbar track (background) */
 ::-webkit-scrollbar-track {
   background: #003597;
   border-radius: 9px;
 }
-
 /* Scrollbar thumb (draggable handle) */
 ::-webkit-scrollbar-thumb {
   background: #00af21;
 }
-
 /* Scrollbar thumb on hover / active */
 ::-webkit-scrollbar-thumb:hover {
   background: #cf00d9;
@@ -199,4 +215,88 @@ textarea {
     Color:#008eff;
 }
 /*----------------------------------------*/
-
+`;
+    // State
+    const state = {
+        styleElement: null,
+        observer: null,
+        retryCount: 0
+    };
+    const utils = {
+        log(message) {
+            if (!CONFIG.DEBUG_MODE) return;
+            console.log(`ChatGPT Styler: ${message}`);
+        }
+    };
+    // Style management
+    //
+    // The <style> element is a direct child of <html>, placed AFTER <head> and
+    // <body>. In document order it therefore comes after every stylesheet the
+    // page adds in <head> or <body>, including lazily loaded ones. For rules of
+    // equal specificity (and equal layer status) the later one wins, so the
+    // page can no longer override these rules by loading CSS after the script.
+    const styleManager = {
+        create() {
+            const el = document.createElement('style');
+            el.id = CONFIG.STYLE_ID;
+            el.textContent = USER_CSS;
+            state.styleElement = el;
+            return el;
+        },
+        // Ensures the element exists, is attached, and is the LAST child of <html>.
+        ensureLast() {
+            const root = document.documentElement;
+            if (!root) return false;
+            const el = state.styleElement || this.create();
+            if (root.lastElementChild !== el) {
+                root.appendChild(el); // appendChild moves the node if already attached
+                utils.log('Style element (re)positioned as last child of <html>');
+            }
+            return true;
+        }
+    };
+    // Observer: watches ONLY direct children of <html> (no subtree), so it is
+    // cheap and does not fire during chat streaming. It fires when <body> is
+    // inserted by the parser, or if something is appended after / removes our element.
+    const observerManager = {
+        setup() {
+            this.cleanup();
+            const root = document.documentElement;
+            if (!root) return;
+            state.observer = new MutationObserver(() => {
+                styleManager.ensureLast();
+            });
+            state.observer.observe(root, { childList: true });
+            utils.log('Observer started');
+        },
+        cleanup() {
+            if (state.observer) {
+                state.observer.disconnect();
+                state.observer = null;
+            }
+        }
+    };
+    // Main initialization
+    const app = {
+        init() {
+            utils.log('Initializing ChatGPT Styler');
+            this.applyWithRetry();
+        },
+        applyWithRetry() {
+            if (styleManager.ensureLast()) {
+                state.retryCount = 0;
+                observerManager.setup();
+                return;
+            }
+            state.retryCount++;
+            if (state.retryCount < CONFIG.MAX_RETRIES) {
+                setTimeout(() => app.applyWithRetry(), CONFIG.RETRY_DELAY);
+            } else {
+                utils.log('Max retries reached, giving up');
+            }
+        }
+    };
+    // Start immediately (@run-at document-start). No DOMContentLoaded wait is
+    // needed: the style lives on <html>, which exists from the start.
+    app.init();
+})();
