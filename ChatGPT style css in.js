@@ -218,11 +218,17 @@ textarea {
 }
 #stage-slideover-sidebar
 {
-    width: 290px !important;
+    width: 310px !important;
     border: 1px #ad00ed solid !important;
 }
 .w-\(--sidebar-width\) {
-    width: 290px;
+    width: 310px;
+}
+.pb-8 {
+    padding-bottom: 1px;
+}
+.px-\(--thread-content-margin\) {
+    padding-inline: 0;
 }
 `;
     // State
