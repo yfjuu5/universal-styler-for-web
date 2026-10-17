@@ -1,27 +1,30 @@
 // ==UserScript==
-// @name ChatGPT Styler for Berry Browser
-// @namespace http://yourdomain.example
-// @version 1
-// @description Enhanced CSS styling for Berry Browser
-// @match https://chatgpt.com/*
-// @run-at document-end
+// @name         ChatGPT Styler for Berry Browser updated
+// @namespace    http://yourdomain.example
+// @version      2
+// @description  Enhanced CSS styling for Berry Browser
+// @match        https://chatgpt.com/*
+// @run-at       document-end
+// @grant        none
 // ==/UserScript==
-(function() {
-'use strict';
-// Configuration
-const CONFIG = {
-    STYLE_ID: 'chatgpt-enhanced-styles',
-    DEBUG_MODE: false,
-    RETRY_DELAY: 100,
-    MAX_RETRIES: 50,
-    OBSERVER_THROTTLE: 250
-};
+
+(function () {
+    'use strict';
+
+    // Configuration
+    const CONFIG = {
+        STYLE_ID: 'chatgpt-enhanced-styles',
+        DEBUG_MODE: false,
+        RETRY_DELAY: 100,   // used only while waiting for <html> to exist
+        MAX_RETRIES: 50
+    };
+
     const USER_CSS = String.raw`
-.ms-auto.flex.shrink-0.items-center.gap-toolbar-action
-,.touch\:p-2\.5
+    .ms-auto.flex.shrink-0.items-center.gap-toolbar-action
+,.-m-1
 ,.mt-auto
 ,.my-4
-,.mb-2
+,.mt-1
 ,[data-testid="sidebar-item-tasks"]
 ,[data-testid="plugins-button"]
 ,[data-testid="sidebar-item-projects"]
@@ -95,12 +98,13 @@ const CONFIG = {
 }
 .min-h-\[46px\] {
     min-height: 40px;
-/*     align-self: center; */
-    border: 1px #00b0c1 solid;
-}
-.justify-end {
     align-self: center;
     border: 1px #00b0c1 solid;
+    width: 210px;
+}
+.justify-end {
+    border: 1px #00b0c1 solid;
+    place-self: center;
 }
 .self-end {
     align-self: center;
@@ -125,217 +129,145 @@ const CONFIG = {
 .max-w-\(--user-chat-width\,70\%\) {
     max-width: 100%;
 }
+.\@w-lg\/main\:\[--thread-content-max-width\:48rem\] {
+/*     --thread-content-max-width: 48rem; */
+    border: 1px #e10000 solid;
+}
+.S6IMGG_Divider {
+    height: 2px;
+    padding-block: 2px;
+    background-color: #00a700;
+}
+.wcDTda_fallbackTextarea, .wcDTda_prosemirror-parent .ProseMirror {
+    margin-top: 0;
+    padding-bottom: 0;
+/*     font-size: var(--text-body-regular,1rem); */
+    text-align: center;
+}
+.text-token-text-primary {
+    color: #e3d5de;
+}
+.bg-transparent {
+    background-color: black;
+}
+textarea {
+    text-align: center;
+}
+.py-3 {
+    padding-block: 0;
+}
+.px-3 {
+    padding-inline: 0;
+}
+.pt-2 {
+    padding-top: 0;
+}
+.px-2 {
+    padding-inline: 3px;
+}
+.overflow-auto>*, .overflow-scroll>*, .overflow-x-auto>*, .overflow-y-auto>* {
+    scrollbar-color: auto;
+}
+.duration-150 {
+    transition-duration: unset;
+    border: 1px #e10000 solid;
+}
+.transition-opacity {
+    transition-timing-function: unset;
+    transition-duration: unset;
+}
+.__menu-item {
+    padding-inline: 0;
+    padding-block: 1px;
+}
 `;
-// State management
-const state = {
-    enabled: true, // Always enabled since we can't save preferences
-    styleElement: null,
-    observer: null,
-    retryCount: 0,
-    lastThrottle: 0,
-    currentURL: location.href
-};
-// Utility functions
-const utils = {
-    log(message) {
-        if (!CONFIG.DEBUG_MODE) return;
-        console.log(`ChatGPT Styler: ${message}`);
-    },
-    throttle(func, delay) {
-        let timeoutId;
-        let lastExecTime = 0;
-        return function(...args) {
-            const context = this;
-            const currentTime = Date.now();
-            const execute = function() {
-                lastExecTime = currentTime;
-                func.apply(context, args);
-            };
-            clearTimeout(timeoutId);
-            if (currentTime - lastExecTime > delay) {
-                execute();
-            } else {
-                timeoutId = setTimeout(execute, delay - (currentTime - lastExecTime));
-            }
-        };
-    },
-    safeCall(fn, fallback = null) {
-        try {
-            return fn();
-        } catch (e) {
-            this.log(`Error in safeCall: ${e}`);
-            return fallback;
+
+    // State
+    const state = {
+        styleElement: null,
+        observer: null,
+        retryCount: 0
+    };
+
+    const utils = {
+        log(message) {
+            if (!CONFIG.DEBUG_MODE) return;
+            console.log(`ChatGPT Styler: ${message}`);
         }
-    }
-};
-// Style management
-const styleManager = {
-    apply() {
-        if (!state.enabled) return false;
-        this.remove();
-        // Direct style injection (the only method supported in Berry Browser)
-        return this.injectStyleElement();
-    },
-    injectStyleElement() {
-        return utils.safeCall(() => {
-            if (!document.head) return false;
-            state.styleElement = document.createElement('style');
-            state.styleElement.id = CONFIG.STYLE_ID;
-            state.styleElement.type = 'text/css';
-            state.styleElement.textContent = USER_CSS;
-            // Make it hard to remove
-            state.styleElement.setAttribute('data-protected', 'true');
-            document.head.appendChild(state.styleElement);
-            utils.log('Styles applied via style element');
+    };
+
+    // Style management
+    //
+    // The <style> element is a direct child of <html>, placed AFTER <head> and
+    // <body>. In document order it therefore comes after every stylesheet the
+    // page adds in <head> or <body>, including lazily loaded ones. For rules of
+    // equal specificity (and equal layer status) the later one wins, so the
+    // page can no longer override these rules by loading CSS after the script.
+    const styleManager = {
+        create() {
+            const el = document.createElement('style');
+            el.id = CONFIG.STYLE_ID;
+            el.textContent = USER_CSS;
+            state.styleElement = el;
+            return el;
+        },
+        // Ensures the element exists, is attached, and is the LAST child of <html>.
+        ensureLast() {
+            const root = document.documentElement;
+            if (!root) return false;
+            const el = state.styleElement || this.create();
+            if (root.lastElementChild !== el) {
+                root.appendChild(el); // appendChild moves the node if already attached
+                utils.log('Style element (re)positioned as last child of <html>');
+            }
             return true;
-        }, false);
-    },
-    remove() {
-        // Remove existing style elements
-        const existingStyle = document.getElementById(CONFIG.STYLE_ID);
-        if (existingStyle) {
-            existingStyle.remove();
         }
-        state.styleElement = null;
-        utils.log('Styles removed');
-    },
-    isApplied() {
-        return !!document.getElementById(CONFIG.STYLE_ID);
-    },
-    forceReapply() {
-        if (state.enabled && !this.isApplied()) {
-            utils.log('Force reapplying styles');
-            this.apply();
-        }
-    }
-};
-// Observer management
-const observerManager = {
-    setup() {
-        this.cleanup();
-        if (!state.enabled) return;
-        this.createDOMObserver();
-        utils.log('Observer started');
-    },
-    createDOMObserver() {
-        const throttledReapply = utils.throttle(() => {
-            styleManager.forceReapply();
-        }, CONFIG.OBSERVER_THROTTLE);
-        state.observer = new MutationObserver(mutations => {
-            let shouldReapply = false;
-            for (const mutation of mutations) {
-                // Check for removed style element
-                if (mutation.removedNodes.length > 0) {
-                    for (const node of mutation.removedNodes) {
-                        if (node.id === CONFIG.STYLE_ID) {
-                            shouldReapply = true;
-                            break;
-                        }
-                    }
-                }
-                // Check for added nodes that might affect styling
-                if (mutation.addedNodes.length > 0 && mutation.target === document.head) {
-                    shouldReapply = true;
-                }
-            }
-            if (shouldReapply) {
-                throttledReapply();
-            }
-        });
-        state.observer.observe(document, {
-            childList: true,
-            subtree: true
-        });
-    },
-    cleanup() {
-        if (state.observer) {
-            state.observer.disconnect();
-            state.observer = null;
-        }
-        utils.log('Observer cleaned up');
-    }
-};
-// SPA Navigation handling
-const navigationManager = {
-    init() {
-        this.overrideHistoryMethods();
-        window.addEventListener('popstate', this.handleURLChange);
-        window.addEventListener('hashchange', this.handleURLChange);
-    },
-    overrideHistoryMethods() {
-        const originalPushState = history.pushState;
-        const originalReplaceState = history.replaceState;
-        history.pushState = function() {
-            originalPushState.apply(this, arguments);
-            navigationManager.handleURLChange();
-        };
-        history.replaceState = function() {
-            originalReplaceState.apply(this, arguments);
-            navigationManager.handleURLChange();
-        };
-    },
-    handleURLChange: utils.throttle(() => {
-        if (location.href !== state.currentURL) {
-            state.currentURL = location.href;
-            utils.log(`URL changed: ${state.currentURL}`);
-            if (state.enabled) {
-                styleManager.forceReapply();
+    };
+
+    // Observer: watches ONLY direct children of <html> (no subtree), so it is
+    // cheap and does not fire during chat streaming. It fires when <body> is
+    // inserted by the parser, or if something is appended after / removes our element.
+    const observerManager = {
+        setup() {
+            this.cleanup();
+            const root = document.documentElement;
+            if (!root) return;
+            state.observer = new MutationObserver(() => {
+                styleManager.ensureLast();
+            });
+            state.observer.observe(root, { childList: true });
+            utils.log('Observer started');
+        },
+        cleanup() {
+            if (state.observer) {
+                state.observer.disconnect();
+                state.observer = null;
             }
         }
-    }, 300)
-};
-// Main initialization
-const app = {
-    init() {
-        utils.log('Initializing ChatGPT Styler for Berry Browser');
-        // Apply styles with retry mechanism
-        this.applyWithRetry();
-        // Setup observer
-        observerManager.setup();
-        // Setup event listeners and SPA handling
-        this.setupEventListeners();
-        navigationManager.init();
-        utils.log('Initialization complete. Styles applied.');
-    },
-    applyWithRetry() {
-        if (!state.enabled) return;
-        const attempt = () => {
-            if (styleManager.apply()) {
+    };
+
+    // Main initialization
+    const app = {
+        init() {
+            utils.log('Initializing ChatGPT Styler');
+            this.applyWithRetry();
+        },
+        applyWithRetry() {
+            if (styleManager.ensureLast()) {
                 state.retryCount = 0;
+                observerManager.setup();
                 return;
             }
             state.retryCount++;
             if (state.retryCount < CONFIG.MAX_RETRIES) {
-                setTimeout(attempt, CONFIG.RETRY_DELAY);
+                setTimeout(() => app.applyWithRetry(), CONFIG.RETRY_DELAY);
             } else {
                 utils.log('Max retries reached, giving up');
             }
-        };
-        attempt();
-    },
-    setupEventListeners() {
-        // Handle visibility changes
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && state.enabled) {
-                setTimeout(() => styleManager.forceReapply(), 100);
-            }
-        });
-        // Handle focus events
-        window.addEventListener('focus', () => {
-            if (state.enabled) {
-                setTimeout(() => styleManager.forceReapply(), 100);
-            }
-        });
-        // Cleanup on unload
-        window.addEventListener('beforeunload', () => {
-            observerManager.cleanup();
-        });
-    }
-};
-// Start the application
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => app.init());
-} else {
+        }
+    };
+
+    // Start immediately (@run-at document-start). No DOMContentLoaded wait is
+    // needed: the style lives on <html>, which exists from the start.
     app.init();
-}
 })();
