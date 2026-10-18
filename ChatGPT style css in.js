@@ -175,6 +175,7 @@ div > .text-token-text-primary .text-token-text-secondary > .flex
 }
 textarea {
     text-align: center;
+    Font-size:19px;
 }
 .py-3 {
     padding-block: 0;
@@ -221,13 +222,9 @@ textarea {
     border: 1px #ae8383 solid;
     Color:#008eff;
 }
-#stage-slideover-sidebar
-{
-    width: 320px !important;
-    border: 1px #ad00ed solid !important;
-}
 .w-\(--sidebar-width\) {
     width: 320px;
+    border-right: 1px #e10000 solid;
 }
 .pb-8 {
     padding-bottom: 1px;
@@ -235,12 +232,10 @@ textarea {
 .px-\(--thread-content-margin\) {
     padding-inline: 0;
 }
-.max-w-xs {
-    max-width: 320px;
-    border: 2px #b18f8f solid;
-}
-.w-\[var\(--sidebar-width\)\] {
-    width: 320px;
+#stage-popover-sidebar{
+/*     border-right: 9px #b18f8f solid; */
+    max-width: max-content;
+    width: auto;
 }
 :is(.__menu-item[data-has-submenu],.__menu-item:has(.trailing))[data-fill] {
     gap: 0;
@@ -248,11 +243,8 @@ textarea {
 .__menu-item[data-has-submenu], .__menu-item:has(.trailing) {
     justify-content: center;
 }
-.__menu-item[data-fill] {
-    max-width: 320px;
-}
 .__menu-item:not([data-orientation=horizontal]) {
-    margin-inline: 10px;
+    margin-inline: 1px;
 }
 .md\:pt-0 {
     border: 1px #d6c7c7 solid;
