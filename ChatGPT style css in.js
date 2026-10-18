@@ -175,7 +175,7 @@ div > .text-token-text-primary .text-token-text-secondary > .flex
 }
 textarea {
     text-align: center;
-    Font-size:19px;
+    Font-size:18px;
 }
 .py-3 {
     padding-block: 0;
