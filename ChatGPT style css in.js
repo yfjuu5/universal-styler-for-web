@@ -60,6 +60,8 @@
 ,#thread-bottom-container > .pointer-events-none
 ,#thread-bottom-container > .w-full
 ,.bottom-\[calc\(var\(--scroll-root-safe-area-inset-bottom\)\+1rem\)\]
+,#radix-_r_b8_
+/* ,.touch\:min-h-10 */
 {
     display: none !important;
 }
@@ -122,15 +124,12 @@
 }
 .justify-end {
     place-self: center;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+/*     opacity: 1 !important; */
 }
 div > .text-token-text-primary .text-token-text-secondary > .flex
 {
     border: 1px #e10000 solid;
-    opacity: 1 !important;
-    visibility: visible !important;
+/*     opacity: 1 !important; */
 }
 .self-end {
     align-self: center;
@@ -141,7 +140,6 @@ div > .text-token-text-primary .text-token-text-secondary > .flex
     background-color: black;
     color: #00bcff;
     Font-size: 19px;
-    border: 1px #e10000 solid;
 }
 .px-4 {
     padding-inline: 0;
@@ -294,6 +292,12 @@ div[class='bg-(--sidebar-surface-primary) relative z-30 w-(--sidebar-width) shri
 .m-2 {
     margin: 0;
     border: 1px #00cde2 solid;
+}
+.py-1\.5 {
+    padding-block: 0;
+}
+.py-1\.5 {
+    justify-content: center;
 }
 `;
     // State
