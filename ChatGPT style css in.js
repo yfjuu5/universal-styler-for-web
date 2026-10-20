@@ -287,8 +287,6 @@ div[class='bg-(--sidebar-surface-primary) relative z-30 w-(--sidebar-width) shri
 }
 .py-1\.5 {
     padding-block: 0;
-}
-.py-1\.5 {
     justify-content: center;
 }
 `;
