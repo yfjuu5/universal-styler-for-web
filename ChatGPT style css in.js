@@ -61,13 +61,13 @@
 ,#thread-bottom-container > .w-full
 ,.bottom-\[calc\(var\(--scroll-root-safe-area-inset-bottom\)\+1rem\)\]
 ,#radix-_r_b8_
-/* ,.touch\:min-h-10 */
+,.touch\:min-h-10
 {
     display: none !important;
 }
 .w6asjq_TextBase {
     color: #dc8a00;
-    font-size: 18px;
+    font-size: 19px;
     text-align: center;
 }
 .GgxHUa_Title[data-d-size=xl]{
@@ -140,6 +140,7 @@ div > .text-token-text-primary .text-token-text-secondary > .flex
     background-color: black;
     color: #00bcff;
     Font-size: 19px;
+    text-align: center;
 }
 .px-4 {
     padding-inline: 0;
@@ -157,14 +158,13 @@ div > .text-token-text-primary .text-token-text-secondary > .flex
     max-width: -webkit-fill-available;
 }
 .S6IMGG_Divider {
-    height: 2px;
-    padding-block: 2px;
-    background-color: #00a700;
+/*     height: 2px;
+/*     padding-block: 2px; */
+/*     background-color: #00a700; */
 }
 .wcDTda_fallbackTextarea, .wcDTda_prosemirror-parent .ProseMirror {
     margin-top: 0;
     padding-bottom: 0;
-/*     font-size: var(--text-body-regular,1rem); */
     text-align: center;
 }
 .text-token-text-primary {
