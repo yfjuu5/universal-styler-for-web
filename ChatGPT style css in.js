@@ -4,7 +4,7 @@
 // @version      2
 // @description  Enhanced CSS styling for Berry Browser
 // @match        https://chatgpt.com/*
-// @run-at       document-end
+// @run-at       document-start
 // @grant        none
 // ==/UserScript==
 (function () {
