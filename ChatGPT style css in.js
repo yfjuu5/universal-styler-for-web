@@ -158,9 +158,9 @@ div > .text-token-text-primary .text-token-text-secondary > .flex
     max-width: -webkit-fill-available;
 }
 .S6IMGG_Divider {
-/*     height: 2px;
-/*     padding-block: 2px; */
-/*     background-color: #00a700; */
+     height: 1px;
+     padding-block: 2px;
+     background-color: #00a700;
 }
 .wcDTda_fallbackTextarea, .wcDTda_prosemirror-parent .ProseMirror {
     margin-top: 0;
