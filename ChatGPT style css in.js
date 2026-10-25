@@ -293,6 +293,13 @@ div[class='bg-(--sidebar-surface-primary) relative z-30 w-(--sidebar-width) shri
 .GgxHUa_Title[data-d-size=md] {
     Color:#e10000;
 }
+.PSWZZq_List[data-d-marker-layout=native][data-d-marker=bullet] {
+    list-style-type: decimal;
+    align-items: center;
+}
+.PSWZZq_List[data-d-marker-layout=native] {
+    padding-inline-start: 20px;
+}
 `;
     // State
     const state = {
