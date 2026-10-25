@@ -62,6 +62,7 @@
 ,.bottom-\[calc\(var\(--scroll-root-safe-area-inset-bottom\)\+1rem\)\]
 ,#radix-_r_b8_
 ,.touch\:min-h-10
+,.backdrop-filter
 {
     display: none !important;
 }
@@ -159,8 +160,8 @@ div > .text-token-text-primary .text-token-text-secondary > .flex
 }
 .S6IMGG_Divider {
      height: 1px;
-     padding-block: 2px;
-     background-color: #00a700;
+    padding-block: 2px;
+    background-color: #00a700;
 }
 .wcDTda_fallbackTextarea, .wcDTda_prosemirror-parent .ProseMirror {
     margin-top: 0;
@@ -288,6 +289,9 @@ div[class='bg-(--sidebar-surface-primary) relative z-30 w-(--sidebar-width) shri
 .py-1\.5 {
     padding-block: 0;
     justify-content: center;
+}
+.GgxHUa_Title[data-d-size=md] {
+    Color:#e10000;
 }
 `;
     // State
