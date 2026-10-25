@@ -82,7 +82,7 @@
 }
 .w6asjq_TextBase[data-d-font-style=italic] {
     font-style: normal;
-    Color: #1fdb00;
+    Color: #b6bcff;
 }
 /*----------------------------------------*/
 .er4J8W_Code {
@@ -299,6 +299,9 @@ div[class='bg-(--sidebar-surface-primary) relative z-30 w-(--sidebar-width) shri
 }
 .PSWZZq_List[data-d-marker-layout=native] {
     padding-inline-start: 20px;
+}
+.GgxHUa_Title[data-d-size=sm] {
+    Color: #1cc300;
 }
 `;
     // State
