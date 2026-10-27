@@ -303,6 +303,13 @@ div[class='bg-(--sidebar-surface-primary) relative z-30 w-(--sidebar-width) shri
 .GgxHUa_Title[data-d-size=sm] {
     Color: #1cc300;
 }
+._6IUVGW_Table th {
+    border: 1px #e10000 solid;
+}
+._6IUVGW_Table[data-d-column-sizing=auto] td {
+    overflow-wrap: break-word;
+    border: 1px #0be100 solid;
+}
 `;
     // State
     const state = {
