@@ -17,11 +17,30 @@
         MAX_RETRIES: 50
     };
     const USER_CSS = String.raw`
+/* Overall scrollbar dimensions */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+/* Scrollbar track (background) */
+::-webkit-scrollbar-track {
+  background: #003597;
+  border-radius: 9px;
+}
+/* Scrollbar thumb (draggable handle) */
+::-webkit-scrollbar-thumb {
+  background: #00af21;
+}
+/* Scrollbar thumb on hover / active */
+::-webkit-scrollbar-thumb:hover {
+  background: #cf00d9;
+}
+/*----------------------------------------*/
 .bg-transparent > .group\/titlebar
 ,div.text-center.text-xs.text-pretty.text-codex-description.select-none.min-h-6.px-toolbar.pb-2
 ,.py-4
 ,#_r_13o_ .group\/titlebar
-,.\[-webkit-app-region\:initial\]
+/* ,.\[-webkit-app-region\:initial\] */
 ,button[data-sidebar-destination='builtin:skills']
 ,button[data-sidebar-destination='builtin:codex']
 ,.mt-3
@@ -31,6 +50,7 @@
 ,#radix-_R_16atqdakrll8aqn75ccgud5hl75_
 ,.border-button-outline
 ,button[aria-label='Scroll to bottom']
+,div.rounded-lg > button.no-drag
 {
     display: none !important;
 }
@@ -130,7 +150,6 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
     Color: #dbcece;
 }
 .\[--thread-content-max-width\:var\(--thread-content-responsive-max-width\,inherit\)\] {
-    --thread-content-max-width: 1030px;
     margin: 0;
 }
 .\[--thread-body-max-width\:calc\(var\(--thread-content-max-width\)\+var\(--thread-body-inline-padding\,0px\)\*2\)\] {
@@ -149,7 +168,7 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 .pb-\(--thread-composer-bottom-inset\) {
     padding-bottom: 0;
     border: 1px #e10000 solid;
-    width: 1090px;
+/*     width: 1090px; */
 }
 .mt-1\.5 {
     margin-top: 0;
@@ -279,6 +298,18 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 }
 code {
     color: #e40000;
+}
+/*----------------------------------------*/
+.ms-auto {
+    margin-inline-start: 0;
+}
+.w-65 {
+    width: 320px;
+    border-right: 1px #e10000 solid;
+}
+.ComposerLayoutFooter-_8IVRO[data-composer-rows=responsive]>.AdaptiveFooterInput-zji599 .ComposerLayoutInput-KwIAr_[data-composer-layout=single-line][data-composer-spacing=default] {
+    padding-block: 5px;
+    padding-inline: 5px;
 }
 `;
     // State
