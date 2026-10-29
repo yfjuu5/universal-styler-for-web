@@ -311,6 +311,9 @@ code {
     padding-block: 5px;
     padding-inline: 5px;
 }
+.Title-mwq_Iy[data-d-size=sm] {
+    Color: #7cc792 !important;
+}
 `;
     // State
     const state = {
