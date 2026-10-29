@@ -250,7 +250,7 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 /*----------------------------------------*/
 .TextBase-qM5iDq {
     color: #de9500;
-    font-size: 20px;
+    font-size: 19px;
 }
     
 .Title-mwq_Iy[data-d-size=xl] {
