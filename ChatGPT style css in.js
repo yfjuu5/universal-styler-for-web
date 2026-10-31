@@ -321,6 +321,9 @@ code {
 [data-d-direction=col]:not([data-d-align])>.Badge-zy7QDL {
     align-self: center;
 }
+.Box-IGz62a[data-d-align=center] {
+    align-self: center;
+}
 `;
     // State
     const state = {
