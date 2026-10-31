@@ -315,8 +315,9 @@ code {
     Color: #7cc792 !important;
 }
 .Badge-_iijmO[data-variant=soft] {
-    border: 1px #517e9c solid;
+    border: 1px #09f solid;
     Font-size: 18px;
+    height: 30px;
 }
 [data-d-direction=col]:not([data-d-align])>.Badge-zy7QDL {
     align-self: center;
