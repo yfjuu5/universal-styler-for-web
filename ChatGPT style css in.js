@@ -314,6 +314,13 @@ code {
 .Title-mwq_Iy[data-d-size=sm] {
     Color: #7cc792 !important;
 }
+.Badge-_iijmO[data-variant=soft] {
+    border: 1px #517e9c solid;
+    Font-size: 18px;
+}
+[data-d-direction=col]:not([data-d-align])>.Badge-zy7QDL {
+    align-self: center;
+}
 `;
     // State
     const state = {
