@@ -66,7 +66,7 @@
     background-color: #000000;
 }
 .max-w-\(--user-chat-width\) {
-    max-width: fit-content;
+        max-width: -webkit-fill-available;
 }
 .text-size-chat {
     font-size: 19px;
@@ -106,7 +106,6 @@ div.group\/user-message.flex.w-full.flex-col.gap-1.items-end
 }
 .pb-8 {
     padding-bottom: 0px;
-    border: 1px #d3c0c0 solid;
     margin: 0;
 }
 .Text-lIMP0_ {
@@ -324,6 +323,12 @@ code {
 }
 .Box-IGz62a[data-d-align=center] {
     align-self: center;
+}
+.max-w-\(--thread-body-max-width\) {
+    max-width: -webkit-fill-available;
+}
+.List-GOP23i[data-d-marker-layout=native][data-d-marker=number] {
+    align-items: center;
 }
 `;
     // State
