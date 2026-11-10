@@ -40,7 +40,6 @@
 ,div.text-center.text-xs.text-pretty.text-codex-description.select-none.min-h-6.px-toolbar.pb-2
 ,.py-4
 ,#_r_13o_ .group\/titlebar
-/* ,.\[-webkit-app-region\:initial\] */
 ,button[data-sidebar-destination='builtin:skills']
 ,button[data-sidebar-destination='builtin:codex']
 ,.mt-3
@@ -51,7 +50,7 @@
 ,.border-button-outline
 ,button[aria-label='Scroll to bottom']
 ,div.rounded-lg > button.no-drag
-,#_r_97_ .group\/titlebar
+,.leading-5
 {
     display: none !important;
 }
