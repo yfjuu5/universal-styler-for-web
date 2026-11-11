@@ -50,7 +50,7 @@
 ,.border-button-outline
 ,button[aria-label='Scroll to bottom']
 ,div.rounded-lg > button.no-drag
-,.\[contain\:layout_paint\]
+,.group\/titlebar
 {
     display: none !important;
 }
