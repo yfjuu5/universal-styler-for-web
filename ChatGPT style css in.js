@@ -50,7 +50,7 @@
 ,.border-button-outline
 ,button[aria-label='Scroll to bottom']
 ,div.rounded-lg > button.no-drag
-,.leading-5
+,.\[contain\:layout_paint\]
 {
     display: none !important;
 }
