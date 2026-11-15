@@ -40,7 +40,6 @@
 ,div.text-center.text-xs.text-pretty.text-codex-description.select-none.min-h-6.px-toolbar.pb-2
 ,.py-4
 ,#_r_13o_ .group\/titlebar
-,.\[-webkit-app-region\:initial\]
 ,button[data-sidebar-destination='builtin:skills']
 ,button[data-sidebar-destination='builtin:codex']
 ,.mt-3
@@ -50,7 +49,8 @@
 ,#radix-_R_16atqdakrll8aqn75ccgud5hl75_
 ,.border-button-outline
 ,button[aria-label='Scroll to bottom']
-,.banner-cPVvz7
+,div.rounded-lg > button.no-drag
+,.group\/titlebar
 {
     display: none !important;
 }
@@ -66,7 +66,7 @@
     background-color: #000000;
 }
 .max-w-\(--user-chat-width\) {
-    max-width: fit-content;
+        max-width: -webkit-fill-available;
 }
 .text-size-chat {
     font-size: 19px;
@@ -106,7 +106,6 @@ div.group\/user-message.flex.w-full.flex-col.gap-1.items-end
 }
 .pb-8 {
     padding-bottom: 0px;
-    border: 1px #d3c0c0 solid;
     margin: 0;
 }
 .Text-lIMP0_ {
@@ -150,7 +149,6 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
     Color: #dbcece;
 }
 .\[--thread-content-max-width\:var\(--thread-content-responsive-max-width\,inherit\)\] {
-    --thread-content-max-width: 1030px;
     margin: 0;
 }
 .\[--thread-body-max-width\:calc\(var\(--thread-content-max-width\)\+var\(--thread-body-inline-padding\,0px\)\*2\)\] {
@@ -169,7 +167,7 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 .pb-\(--thread-composer-bottom-inset\) {
     padding-bottom: 0;
     border: 1px #e10000 solid;
-    width: 1090px;
+/*     width: 1090px; */
 }
 .mt-1\.5 {
     margin-top: 0;
@@ -203,12 +201,7 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 }
 .z-20 > .shrink-0{
     border: 1px #9f7700 solid;
-}
-.leading-5 {
-    Color: #e47100 !important;
-    Font-size: 17px;
-}
-.Code-kbs71c {
+}.Code-kbs71c {
     color: #00c7ff;
 }
 .TextBase-hXhSqg[data-d-weight=semibold]{
@@ -238,6 +231,10 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 .MainContentFrame-sss8BP {
     margin-top: 0;
 }
+.List-rH8nmc[data-d-marker-layout=native][data-d-marker=bullet] {
+    list-style-type: decimal;
+    align-items: center;
+}
 .List-rH8nmc[data-d-marker-layout=native] {
     padding-inline-start: 30px;
 }
@@ -247,7 +244,7 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 /*----------------------------------------*/
 .TextBase-qM5iDq {
     color: #de9500;
-    font-size: 22px;
+    font-size: 19px;
 }
     
 .Title-mwq_Iy[data-d-size=xl] {
@@ -283,6 +280,10 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
     border: 1px #15df00 solid;
     text-align: center;
 }
+.List-GOP23i[data-d-marker-layout=native][data-d-marker=bullet] {
+    list-style-type: decimal;
+    align-items: center;
+}
 .TextBase-qM5iDq[data-d-weight=medium] {
     Color: #c6dad7 !important;
 }
@@ -292,12 +293,24 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
 code {
     color: #e40000;
 }
+/*----------------------------------------*/
+.ms-auto {
+    margin-inline-start: 0;
+}
+.w-65 {
+    width: 320px;
+    border-right: 1px #e10000 solid;
+}
+.ComposerLayoutFooter-_8IVRO[data-composer-rows=responsive]>.AdaptiveFooterInput-zji599 .ComposerLayoutInput-KwIAr_[data-composer-layout=single-line][data-composer-spacing=default] {
+    padding-block: 5px;
+    padding-inline: 5px;
+}
 .Title-mwq_Iy[data-d-size=sm] {
     Color: #7cc792 !important;
 }
 .Badge-_iijmO[data-variant=soft] {
     border: 1px #09f solid;
-    Font-size: 18px;
+    Font-size: 17px;
     height: 30px;
     align-self: center;
 }
@@ -307,41 +320,11 @@ code {
 .Box-IGz62a[data-d-align=center] {
     align-self: center;
 }
+.max-w-\(--thread-body-max-width\) {
+    max-width: -webkit-fill-available;
+}
 .List-GOP23i[data-d-marker-layout=native][data-d-marker=number] {
     align-items: center;
-}
-/*lst v yfjuu5----------------------------------------*/
-.TextBase-kDAqPL {
-    text-align: center;
-}
-.Text-dOmvsS {
-    color: #de9500;
-    Font-size:20px;
-}
-.Title-ij922C[data-d-size=lg] {
-    Color: #02d200;
-}
-:is(.DilRenderer-temL23.DilResponseRoot-fdCmoC,.DilRenderer-temL23 [data-d-list-item-content])>* {
-    margin-block-start: 0;
-}
-.TextBase-kDAqPL[data-d-default-strong] {
-    Color: #e300ff !important;
-}
-.TextBase-kDAqPL[data-d-font-style=italic] {
-    font-style: normal;
-    Color: #00e9ff;
-}
-.List-bYalj1[data-d-marker-layout=native][data-d-marker=bullet] {
-    list-style-type: decimal;
-    align-items: center;
-}
-.Divider-aIXBUs {
-    height: 2px;
-    background-color: green;
-    padding-block: 3px;
-}
-.katex-display {
-    margin: 0;
 }
 /*lst v yfjuu6----------------------------------------*/
 .kDAqPLZc {
