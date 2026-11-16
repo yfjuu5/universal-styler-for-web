@@ -446,6 +446,9 @@ code {
 .\[\@container_style\(--actions-opacity\:0\)\]\:\[content-visibility\:hidden\] {
     content-visibility: visible;
 }
+.aria-\[current\=page\]\:bg-secondary-ghost-hover[aria-current=page] {
+    border: 2px #d5bcbc solid;
+}
 `;
     // State
     const state = {
