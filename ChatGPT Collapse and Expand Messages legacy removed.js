@@ -1,11 +1,10 @@
 // ==UserScript==
 // @name         ChatGPT Collapse and Expand Messages
 // @namespace    https://github.com/ChinaGodMan/UserScripts
-// @version      1.5.0
-// @description  Add "Collapse or Expand" buttons to ChatGPT messages. Auto-collapse specific user messages. Keeps native user-message controls visible; user messages expand while being edited.
+// @version      1.6.0
+// @description  Add "Collapse or Expand" buttons to ChatGPT messages. Auto-collapse specific user phrases. Keeps native user-message controls visible; user messages expand while being edited. Stable state handling and scroll-position preservation.
 // @match        https://chatgpt.com/*
 // @run-at       document-idle
-// @grant        none
 // @license      MIT
 // ==/UserScript==
 
@@ -38,6 +37,9 @@
     const MIN_HEIGHT = 200;        // messages shorter than this get no button (as in the original)
     const SCAN_DELAY = 200;        // ms: at most one scan per interval while the DOM is busy
     const SAFETY_INTERVAL = 3000;  // ms: slow safety sweep
+    const SCROLL_IDLE = 150;       // ms: scans wait until scrolling has been quiet this long
+    const MAX_NEW_PER_SCAN = 6;    // new buttons per scan (avoids a layout storm on long threads)
+    const MAX_RETARGETS = 2;       // max re-resolutions of a user target because of native controls
     const KEY_PREFIX = 'cgcm:v2:';
     const BTN_CLASS = 'cgcm-toggle-button';
     const COLLAPSED_CLASS = 'cgcm-collapsed';
@@ -60,6 +62,12 @@
 
     // element -> { id, role, root, target, anchor, button, collapsed, actionsInside }
     const entries = new WeakMap();
+    // element -> number of times its target was re-resolved because native controls were inside it
+    const retargets = new WeakMap();
+    // id -> 'collapsed' | 'expanded'  (in-memory source of truth, mirrored to localStorage)
+    const stateCache = new Map();
+    // ids that already passed the MIN_HEIGHT test once (hysteresis: a clipped message is not "too short")
+    const qualifiedIds = new Set();
 
     // ---------- Styles ----------
     const style = document.createElement('style');
@@ -101,6 +109,18 @@
     }
     function storageSet(key, value) {
         try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+    }
+
+    // State: the in-memory cache wins; storage is read at most once per id.
+    function getState(id) {
+        if (stateCache.has(id)) return stateCache.get(id);
+        const v = storageGet(id);
+        if (v) stateCache.set(id, v);
+        return v;
+    }
+    function setState(id, value) {
+        stateCache.set(id, value);
+        storageSet(id, value);
     }
 
     function hashString(str) {
@@ -202,6 +222,68 @@
         return anchor;
     }
 
+    // ---------- Scroll-position preservation ----------
+    // Any batch of DOM writes (button insertion, class changes, removals) can shift content that
+    // lies above the viewport. withAnchor() remembers where a reference element sits on screen,
+    // disables the browser's own scroll anchoring for the batch, and then restores the
+    // reference element's on-screen position by correcting scrollTop.
+    let scanCtx = null;
+
+    function getScroller(from) {
+        let n = from && from.parentElement;
+        while (n && n !== document.body && n !== document.documentElement) {
+            const oy = getComputedStyle(n).overflowY;
+            if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && n.scrollHeight > n.clientHeight) return n;
+            n = n.parentElement;
+        }
+        return document.scrollingElement || document.documentElement;
+    }
+
+    // Call right before the first DOM write of a batch (idempotent).
+    function markWrite() {
+        const ctx = scanCtx;
+        if (!ctx || ctx.dirty) return;
+        ctx.dirty = true;
+        ctx.scroller = getScroller(ctx.ref);
+        ctx.prevAnchor = ctx.scroller.style.overflowAnchor;
+        ctx.scroller.style.overflowAnchor = 'none';
+    }
+
+    function finishAnchor(ctx) {
+        if (!ctx.dirty) return;
+        const scroller = ctx.scroller;
+        try {
+            if (ctx.ref && ctx.ref.isConnected) {
+                const delta = ctx.ref.getBoundingClientRect().top - ctx.top0;
+                if (Math.abs(delta) >= 0.5) scroller.scrollTop += delta;
+            }
+        } finally {
+            requestAnimationFrame(() => { scroller.style.overflowAnchor = ctx.prevAnchor || ''; });
+        }
+    }
+
+    function withAnchor(ref, fn) {
+        const ctx = {
+            ref: ref && ref.isConnected ? ref : null,
+            top0: 0, dirty: false, scroller: null, prevAnchor: ''
+        };
+        if (ctx.ref) ctx.top0 = ctx.ref.getBoundingClientRect().top;
+        const outer = scanCtx;
+        scanCtx = ctx;
+        try { fn(); } finally { scanCtx = outer; finishAnchor(ctx); }
+    }
+
+    // First message that is at least partly visible: it serves as the scroll reference.
+    function pickReference(targets) {
+        for (const el of targets) {
+            const box = layoutBox(el);
+            if (!box) continue;
+            const r = box.getBoundingClientRect();
+            if (r.height > 0 && r.bottom > 1) return box;
+        }
+        return null;
+    }
+
     // ---------- User messages: content vs. native controls vs. edit mode ----------
 
     // Native controls = buttons (outside code blocks). No labels or class names involved.
@@ -237,7 +319,7 @@
 
     function isTargetValid(entry) {
         if (!entry.target.isConnected || !entry.root.contains(entry.target)) return false;
-        // Native controls rendered late inside a user target: re-resolve (once; see actionsInside)
+        // Native controls rendered late inside a user target: re-resolve (bounded by MAX_RETARGETS)
         return !(entry.role === 'user' && !entry.actionsInside && hasButtons(entry.target));
     }
 
@@ -245,7 +327,8 @@
     function applyState(entry) {
         entry.target.classList.toggle(COLLAPSED_CLASS, entry.collapsed);
         entry.target.classList.toggle('cgcm-user', entry.role === 'user');
-        entry.button.textContent = entry.collapsed ? 'Expand' : 'Collapse';
+        const label = entry.collapsed ? 'Expand' : 'Collapse';
+        if (entry.button.textContent !== label) entry.button.textContent = label;
     }
 
     function createButton(entry, isUser, isAutoCollapsed) {
@@ -264,9 +347,13 @@
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            entry.collapsed = !entry.collapsed;
-            applyState(entry);
-            storageSet(entry.id, entry.collapsed ? 'collapsed' : 'expanded');
+            // Keep the clicked button exactly where it is on screen.
+            withAnchor(btn, () => {
+                markWrite();
+                entry.collapsed = !entry.collapsed;
+                setState(entry.id, entry.collapsed ? 'collapsed' : 'expanded');
+                applyState(entry);
+            });
         });
         return btn;
     }
@@ -278,21 +365,30 @@
 
     // Repair anything a re-render may have undone (button removed/moved, class wiped).
     function heal(entry) {
+        // Re-sync from the shared state (another entry with the same id may have been clicked).
+        const shared = stateCache.get(entry.id);
+        if (shared) entry.collapsed = shared === 'collapsed';
+
         if (!entry.anchor.isConnected || !entry.anchor.contains(entry.root)) {
             entry.anchor = pickAnchor(entry.root);
         }
         const parent = entry.anchor.parentElement;
         if (parent && (!entry.button.isConnected || entry.button.nextElementSibling !== entry.anchor)) {
+            markWrite();
             parent.insertBefore(entry.button, entry.anchor);
         }
         const label = entry.collapsed ? 'Expand' : 'Collapse';
         if (entry.target.classList.contains(COLLAPSED_CLASS) !== entry.collapsed ||
             entry.button.textContent !== label) {
+            markWrite();
             applyState(entry);
         }
     }
 
     // ---------- Core ----------
+    let createdThisScan = 0;
+    let needMoreScan = false;
+
     function processElement(el, root, role, id, live) {
         let entry = entries.get(el);
 
@@ -306,21 +402,38 @@
             return;
         }
 
-        if (entry && (entry.id !== id || entry.root !== root || !isTargetValid(entry))) {
-            // node reused for another message, inner box replaced, or native controls ended up inside the target
-            teardown(entry);
-            entries.delete(el);
-            entry = null;
+        if (entry) {
+            const sameIdentity = entry.id === id && entry.root === root;
+            if (!sameIdentity || !isTargetValid(entry)) {
+                // node reused for another message, inner box replaced, or native controls ended up inside the target
+                if (sameIdentity) retargets.set(el, (retargets.get(el) || 0) + 1);
+                else retargets.delete(el);
+                markWrite();
+                teardown(entry);
+                entries.delete(el);
+                entry = null;
+            }
         }
 
         if (entry) {
+            // Two entries must never control the same target (they would fight over its class).
+            if (live.targets.has(entry.target)) {
+                markWrite();
+                entry.button.remove();
+                entries.delete(el);
+                return;
+            }
             heal(entry);
             live.buttons.add(entry.button);
             live.targets.add(entry.target);
             return;
         }
 
-        if (root.offsetHeight < MIN_HEIGHT) return; // too short or not laid out yet: retried on later scans
+        // Too short or not laid out yet: retried on later scans. Ids that already qualified once
+        // skip this test (a message clipped to 100px must not be mistaken for a short one).
+        if (!qualifiedIds.has(id) && root.offsetHeight < MIN_HEIGHT) return;
+
+        if (createdThisScan >= MAX_NEW_PER_SCAN) { needMoreScan = true; return; }
 
         const isUser = role === 'user';
         const innerText = (root.innerText || '').replace(/\u00a0/g, ' ');
@@ -332,28 +445,36 @@
         if (!anchor.parentElement) return;
 
         const resolved = resolveTarget(root, role);
-        const stored = storageGet(id);
+        if (live.targets.has(resolved.node)) return; // already controlled by another entry
+
+        const stored = getState(id);
         entry = {
             id, role, root, anchor,
             target: resolved.node,
-            actionsInside: !resolved.clean,
+            // After MAX_RETARGETS re-resolutions, accept the target as it is (breaks rebuild loops)
+            actionsInside: !resolved.clean || (retargets.get(el) || 0) >= MAX_RETARGETS,
             button: null,
             collapsed: stored === 'collapsed' || (isAutoCollapsed && stored !== 'expanded')
         };
         entry.button = createButton(entry, isUser, isAutoCollapsed);
 
+        markWrite();
         anchor.parentElement.insertBefore(entry.button, anchor);
         entries.set(el, entry);
         applyState(entry);
+        qualifiedIds.add(id);
+        createdThisScan++;
         live.buttons.add(entry.button);
         live.targets.add(entry.target);
     }
 
-    function scan() {
+    function scanBody(targets) {
         const live = { buttons: new Set(), targets: new Set() };
         const counts = new Map(); // occurrence counter for hash-based ids (identical repeated messages)
+        createdThisScan = 0;
+        needMoreScan = false;
 
-        findTargets().forEach(el => {
+        targets.forEach(el => {
             try {
                 const role = getRole(el);
                 const root = layoutBox(el);
@@ -376,25 +497,52 @@
         });
 
         // Remove orphaned buttons / stale collapsed classes left by re-rendered nodes
-        document.querySelectorAll('.' + BTN_CLASS).forEach(b => { if (!live.buttons.has(b)) b.remove(); });
-        document.querySelectorAll('.' + COLLAPSED_CLASS).forEach(t => {
-            if (!live.targets.has(t)) t.classList.remove(COLLAPSED_CLASS);
+        document.querySelectorAll('.' + BTN_CLASS).forEach(b => {
+            if (!live.buttons.has(b)) { markWrite(); b.remove(); }
         });
+        document.querySelectorAll('.' + COLLAPSED_CLASS).forEach(t => {
+            if (!live.targets.has(t)) { markWrite(); t.classList.remove(COLLAPSED_CLASS); }
+        });
+    }
+
+    function scan() {
+        const targets = findTargets();
+        const ref = pickReference(targets);
+        withAnchor(ref, () => scanBody(targets));
+        if (needMoreScan) scheduleScan();
     }
 
     // ---------- Scheduling ----------
     let timer = null;
+    let lastScroll = 0;
+
+    // Never scan in the middle of a scroll gesture: wait until scrolling has been quiet.
+    document.addEventListener('scroll', () => { lastScroll = performance.now(); },
+        { capture: true, passive: true });
+
+    function runScheduled() {
+        timer = null;
+        const wait = SCROLL_IDLE - (performance.now() - lastScroll);
+        if (wait > 0) {
+            timer = setTimeout(runScheduled, wait + 10);
+            return;
+        }
+        scan();
+    }
+
     function scheduleScan() {
         if (timer) return;
-        timer = setTimeout(() => { timer = null; scan(); }, SCAN_DELAY);
+        timer = setTimeout(runScheduled, SCAN_DELAY);
     }
 
     const isOwnNode = n => n.nodeType === 1 && n.classList.contains(BTN_CLASS);
 
     const observer = new MutationObserver(mutations => {
         for (const m of mutations) {
-            for (const n of m.addedNodes) if (!isOwnNode(n)) return scheduleScan();
-            for (const n of m.removedNodes) if (!isOwnNode(n)) return scheduleScan();
+            // Our own button label changes are not page changes
+            if (m.target.nodeType === 1 && m.target.classList.contains(BTN_CLASS)) continue;
+            for (const n of m.addedNodes) if (n.nodeType === 1 && !isOwnNode(n)) return scheduleScan();
+            for (const n of m.removedNodes) if (n.nodeType === 1 && !isOwnNode(n)) return scheduleScan();
         }
     });
 
@@ -432,7 +580,7 @@
     function start() {
         observer.observe(document.body, { childList: true, subtree: true });
         scan();
-        setInterval(() => { if (!document.hidden) scan(); }, SAFETY_INTERVAL);
+        setInterval(() => { if (!document.hidden) scheduleScan(); }, SAFETY_INTERVAL);
         window.addEventListener('load', scheduleScan);
     }
 
