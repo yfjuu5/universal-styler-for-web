@@ -440,6 +440,12 @@ code {
 .pt-\[calc\(var\(--thread-content-top-inset\)-var\(--thread-frame-scrollbar-inset\)\)\] {
     padding-top: 0;
 }
+.opacity-\(--actions-opacity\) {
+    opacity: 1;
+}
+.\[\@container_style\(--actions-opacity\:0\)\]\:\[content-visibility\:hidden\] {
+    content-visibility: visible;
+}
 `;
     // State
     const state = {
