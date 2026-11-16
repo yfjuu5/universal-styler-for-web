@@ -2,10 +2,9 @@
 // @name         ChatGPT Collapse and Expand Messages
 // @namespace    https://github.com/ChinaGodMan/UserScripts
 // @version      1.6.0
-// @description  Add "Collapse or Expand" buttons to ChatGPT messages. Auto-collapse specific user phrases. Keeps native user-message controls visible; user messages expand while being edited.
+// @description  Add "Collapse or Expand" buttons to ChatGPT messages. Auto-collapse specific user phrases. Keeps native user-message controls visible; user messages expand while being edited. Stable state handling and scroll-position preservation.
 // @match        https://chatgpt.com/*
 // @run-at       document-idle
-// @grant        none
 // @license      MIT
 // ==/UserScript==
 
@@ -35,41 +34,40 @@
         "The target phrasal verb to analyze is:"
     ];
 
-    const MIN_HEIGHT = 200;
-    const SCAN_DELAY = 200;
-    const SAFETY_INTERVAL = 3000;
+    const MIN_HEIGHT = 200;        // messages shorter than this get no button (as in the original)
+    const SCAN_DELAY = 200;        // ms: at most one scan per interval while the DOM is busy
+    const SAFETY_INTERVAL = 3000;  // ms: slow safety sweep
+    const SCROLL_IDLE = 150;       // ms: scans wait until scrolling has been quiet this long
+    const MAX_NEW_PER_SCAN = 6;    // new buttons per scan (avoids a layout storm on long threads)
+    const MAX_RETARGETS = 2;       // max re-resolutions of a user target because of native controls
     const KEY_PREFIX = 'cgcm:v2:';
     const BTN_CLASS = 'cgcm-toggle-button';
     const COLLAPSED_CLASS = 'cgcm-collapsed';
 
-    // NEW: grace period before an invalidated entry is torn down (prevents
-    // expand/collapse loops during React re-renders).
-    const STALE_GRACE_MS = 2000;
-    // NEW: pause scans while the user is scrolling.
-    const SCROLL_SETTLE_MS = 250;
-
     // Current layout markers. Nested matches are reduced to the outermost one.
     const MESSAGE_SELECTOR = [
-        '[data-content-search-unit-key]',
-        '[data-user-message-bubble]',
-        '[data-chatgpt-selection-message-id]',
-        '[data-markdown-text-style="assistant-message"]'
+        '[data-content-search-unit-key]',                     // one unit per message ("<turn>:<index>:<role>")
+        '[data-user-message-bubble]',                         // user text bubble
+        '[data-chatgpt-selection-message-id]',                // assistant answer body
+        '[data-markdown-text-style="assistant-message"]'      // assistant markdown
     ].join(',');
 
-    // Preferred content-only elements inside a USER message.
+    // Preferred content-only elements inside a USER message (the native action row is outside them).
     const USER_CONTENT_SELECTORS = ['.text-user-message', '[data-user-message-bubble]'];
 
     const BUTTON_SELECTOR = 'button, [role="button"]';
 
-    // Structural markers for editing mode.
+    // Controls that indicate a user message is being edited (structural: no labels, no class names).
     const EDITOR_SELECTOR = 'textarea, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
 
     // element -> { id, role, root, target, anchor, button, collapsed, actionsInside }
     const entries = new WeakMap();
-    // NEW: element -> timestamp when it first became invalid (grace period)
-    const staleSince = new WeakMap();
-    // NEW: target -> timestamp when the collapsed class became orphaned
-    const orphanSince = new WeakMap();
+    // element -> number of times its target was re-resolved because native controls were inside it
+    const retargets = new WeakMap();
+    // id -> 'collapsed' | 'expanded'  (in-memory source of truth, mirrored to localStorage)
+    const stateCache = new Map();
+    // ids that already passed the MIN_HEIGHT test once (hysteresis: a clipped message is not "too short")
+    const qualifiedIds = new Set();
 
     // ---------- Styles ----------
     const style = document.createElement('style');
@@ -79,7 +77,6 @@
             overflow: hidden !important;
             max-height: 100px !important;
             min-height: 0 !important;
-            overflow-anchor: none !important; /* NEW: no scroll-anchor jitter */
         }
         .${COLLAPSED_CLASS}::after {
             content: "";
@@ -91,6 +88,7 @@
             background: linear-gradient(to bottom, transparent, red);
             pointer-events: none;
         }
+        /* A user message being edited is never clipped (applies the instant the editor appears) */
         .${COLLAPSED_CLASS}.cgcm-user:has(${EDITOR_SELECTOR}) {
             overflow: visible !important;
             max-height: none !important;
@@ -101,7 +99,6 @@
         .${BTN_CLASS} {
             display: block;
             text-align: center;
-            overflow-anchor: none; /* NEW */
         }
     `;
     (document.head || document.documentElement).appendChild(style);
@@ -112,6 +109,18 @@
     }
     function storageSet(key, value) {
         try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+    }
+
+    // State: the in-memory cache wins; storage is read at most once per id.
+    function getState(id) {
+        if (stateCache.has(id)) return stateCache.get(id);
+        const v = storageGet(id);
+        if (v) stateCache.set(id, v);
+        return v;
+    }
+    function setState(id, value) {
+        stateCache.set(id, value);
+        storageSet(id, value);
     }
 
     function hashString(str) {
@@ -134,6 +143,7 @@
         return 'assistant';
     }
 
+    // An element with display: contents has no box; use its first box-generating descendant.
     function layoutBox(el) {
         let node = el;
         while (node && getComputedStyle(node).display === 'contents') {
@@ -150,6 +160,7 @@
         return true;
     }
 
+    // All message elements, outermost match only (avoids duplicate buttons from nested markers).
     function findTargets() {
         const all = document.querySelectorAll(MESSAGE_SELECTOR);
         const set = new Set(all);
@@ -163,6 +174,7 @@
         return result;
     }
 
+    // First `max` characters of visible text, without forcing a full layout/innerText.
     function leadText(el, max) {
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         let out = '';
@@ -172,6 +184,7 @@
         return out.trim().substring(0, max);
     }
 
+    // A stable, attribute-based message id when the page provides one.
     function stableId(el) {
         let v;
         const body = el.matches('[data-chatgpt-selection-message-id]')
@@ -190,6 +203,8 @@
         return null;
     }
 
+    // Where to insert the button. Normally right before the message; if the message sits in a
+    // row-flex/grid container that holds only this message, insert before that container instead.
     function pickAnchor(root) {
         let anchor = root;
         for (let i = 0; i < 3; i++) {
@@ -207,10 +222,77 @@
         return anchor;
     }
 
+    // ---------- Scroll-position preservation ----------
+    // Any batch of DOM writes (button insertion, class changes, removals) can shift content that
+    // lies above the viewport. withAnchor() remembers where a reference element sits on screen,
+    // disables the browser's own scroll anchoring for the batch, and then restores the
+    // reference element's on-screen position by correcting scrollTop.
+    let scanCtx = null;
+
+    function getScroller(from) {
+        let n = from && from.parentElement;
+        while (n && n !== document.body && n !== document.documentElement) {
+            const oy = getComputedStyle(n).overflowY;
+            if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && n.scrollHeight > n.clientHeight) return n;
+            n = n.parentElement;
+        }
+        return document.scrollingElement || document.documentElement;
+    }
+
+    // Call right before the first DOM write of a batch (idempotent).
+    function markWrite() {
+        const ctx = scanCtx;
+        if (!ctx || ctx.dirty) return;
+        ctx.dirty = true;
+        ctx.scroller = getScroller(ctx.ref);
+        ctx.prevAnchor = ctx.scroller.style.overflowAnchor;
+        ctx.scroller.style.overflowAnchor = 'none';
+    }
+
+    function finishAnchor(ctx) {
+        if (!ctx.dirty) return;
+        const scroller = ctx.scroller;
+        try {
+            if (ctx.ref && ctx.ref.isConnected) {
+                const delta = ctx.ref.getBoundingClientRect().top - ctx.top0;
+                if (Math.abs(delta) >= 0.5) scroller.scrollTop += delta;
+            }
+        } finally {
+            requestAnimationFrame(() => { scroller.style.overflowAnchor = ctx.prevAnchor || ''; });
+        }
+    }
+
+    function withAnchor(ref, fn) {
+        const ctx = {
+            ref: ref && ref.isConnected ? ref : null,
+            top0: 0, dirty: false, scroller: null, prevAnchor: ''
+        };
+        if (ctx.ref) ctx.top0 = ctx.ref.getBoundingClientRect().top;
+        const outer = scanCtx;
+        scanCtx = ctx;
+        try { fn(); } finally { scanCtx = outer; finishAnchor(ctx); }
+    }
+
+    // First message that is at least partly visible: it serves as the scroll reference.
+    function pickReference(targets) {
+        for (const el of targets) {
+            const box = layoutBox(el);
+            if (!box) continue;
+            const r = box.getBoundingClientRect();
+            if (r.height > 0 && r.bottom > 1) return box;
+        }
+        return null;
+    }
+
     // ---------- User messages: content vs. native controls vs. edit mode ----------
+
+    // Native controls = buttons (outside code blocks). No labels or class names involved.
     const hasButtons = node => Array.from(node.querySelectorAll(BUTTON_SELECTOR)).some(b => !b.closest('pre'));
+
+    // A user message is being edited when it contains a rendered editing control.
     const isEditing = root => Array.from(root.querySelectorAll(EDITOR_SELECTOR)).some(e => e.offsetHeight >= 16);
 
+    // Structural fallback: descend into the child holding the most text until no buttons remain.
     function descendToContent(node) {
         while (hasButtons(node)) {
             const kid = Array.from(node.children)
@@ -221,6 +303,7 @@
         return node;
     }
 
+    // Which element gets the collapsed class. Assistant messages: the root, as before.
     function resolveTarget(root, role) {
         if (role !== 'user') return { node: root, clean: true };
 
@@ -236,6 +319,7 @@
 
     function isTargetValid(entry) {
         if (!entry.target.isConnected || !entry.root.contains(entry.target)) return false;
+        // Native controls rendered late inside a user target: re-resolve (bounded by MAX_RETARGETS)
         return !(entry.role === 'user' && !entry.actionsInside && hasButtons(entry.target));
     }
 
@@ -243,7 +327,8 @@
     function applyState(entry) {
         entry.target.classList.toggle(COLLAPSED_CLASS, entry.collapsed);
         entry.target.classList.toggle('cgcm-user', entry.role === 'user');
-        entry.button.textContent = entry.collapsed ? 'Expand' : 'Collapse';
+        const label = entry.collapsed ? 'Expand' : 'Collapse';
+        if (entry.button.textContent !== label) entry.button.textContent = label;
     }
 
     function createButton(entry, isUser, isAutoCollapsed) {
@@ -262,9 +347,13 @@
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            entry.collapsed = !entry.collapsed;
-            applyState(entry);
-            storageSet(entry.id, entry.collapsed ? 'collapsed' : 'expanded');
+            // Keep the clicked button exactly where it is on screen.
+            withAnchor(btn, () => {
+                markWrite();
+                entry.collapsed = !entry.collapsed;
+                setState(entry.id, entry.collapsed ? 'collapsed' : 'expanded');
+                applyState(entry);
+            });
         });
         return btn;
     }
@@ -272,35 +361,39 @@
     function teardown(entry) {
         entry.button.remove();
         entry.target.classList.remove(COLLAPSED_CLASS);
-        entry.target.classList.remove('cgcm-user');
     }
 
+    // Repair anything a re-render may have undone (button removed/moved, class wiped).
     function heal(entry) {
+        // Re-sync from the shared state (another entry with the same id may have been clicked).
+        const shared = stateCache.get(entry.id);
+        if (shared) entry.collapsed = shared === 'collapsed';
+
         if (!entry.anchor.isConnected || !entry.anchor.contains(entry.root)) {
             entry.anchor = pickAnchor(entry.root);
         }
         const parent = entry.anchor.parentElement;
         if (parent && (!entry.button.isConnected || entry.button.nextElementSibling !== entry.anchor)) {
+            markWrite();
             parent.insertBefore(entry.button, entry.anchor);
         }
         const label = entry.collapsed ? 'Expand' : 'Collapse';
-        // NEW: also repair a wiped 'cgcm-user' class
-        const hasCollapsed = entry.target.classList.contains(COLLAPSED_CLASS);
-        const hasUser = entry.target.classList.contains('cgcm-user');
-        if (hasCollapsed !== entry.collapsed ||
-            hasUser !== (entry.role === 'user') ||
+        if (entry.target.classList.contains(COLLAPSED_CLASS) !== entry.collapsed ||
             entry.button.textContent !== label) {
+            markWrite();
             applyState(entry);
         }
     }
 
     // ---------- Core ----------
+    let createdThisScan = 0;
+    let needMoreScan = false;
+
     function processElement(el, root, role, id, live) {
         let entry = entries.get(el);
 
-        // User message being edited: change nothing (the CSS above keeps the
-        // editor unclipped) and keep our button/class alive so cleanup does
-        // not strip them.
+        // User message being edited: change nothing (the CSS above keeps the editor unclipped)
+        // and keep our button/class alive so cleanup does not strip them.
         if (role === 'user' && isEditing(root)) {
             if (entry) {
                 live.buttons.add(entry.button);
@@ -310,74 +403,37 @@
         }
 
         if (entry) {
-            // NEW: migrate storage id when the message id changes
-            if (entry.id !== id) {
-                if (storageGet(id) === null) {
-                    storageSet(id, entry.collapsed ? 'collapsed' : 'expanded');
-                }
-                entry.id = id;
+            const sameIdentity = entry.id === id && entry.root === root;
+            if (!sameIdentity || !isTargetValid(entry)) {
+                // node reused for another message, inner box replaced, or native controls ended up inside the target
+                if (sameIdentity) retargets.set(el, (retargets.get(el) || 0) + 1);
+                else retargets.delete(el);
+                markWrite();
+                teardown(entry);
+                entries.delete(el);
+                entry = null;
             }
-
-            // NEW: root changed — try to keep the entry if the target is valid
-            if (entry.root !== root) {
-                if (root.contains(entry.target) && entry.target.isConnected) {
-                    entry.root = root;
-                } else {
-                    teardown(entry);
-                    entries.delete(el);
-                    staleSince.delete(el);
-                    entry = null;
-                }
-            }
-        }
-
-        if (entry && !isTargetValid(entry)) {
-            // NEW: grace period — do NOT tear down immediately.
-            const now = Date.now();
-            let since = staleSince.get(el);
-            if (since === undefined) {
-                staleSince.set(el, now);
-                since = now;
-            }
-
-            if (now - since < STALE_GRACE_MS) {
-                // Try to re-resolve a disconnected target so the visual
-                // collapsed state survives a transient re-render.
-                if (!entry.target.isConnected && entry.root.isConnected) {
-                    try {
-                        const resolved = resolveTarget(entry.root, entry.role);
-                        if (resolved.node && resolved.node.isConnected) {
-                            entry.target.classList.remove(COLLAPSED_CLASS);
-                            entry.target.classList.remove('cgcm-user');
-                            entry.target = resolved.node;
-                            entry.actionsInside = !resolved.clean;
-                            applyState(entry);
-                        }
-                    } catch (e) { /* ignore */ }
-                }
-                try { heal(entry); } catch (e) { /* ignore */ }
-                live.buttons.add(entry.button);
-                live.targets.add(entry.target);
-                return;
-            }
-
-            // Grace expired — tear down for real.
-            teardown(entry);
-            entries.delete(el);
-            staleSince.delete(el);
-            entry = null;
-        } else if (entry) {
-            staleSince.delete(el);
         }
 
         if (entry) {
+            // Two entries must never control the same target (they would fight over its class).
+            if (live.targets.has(entry.target)) {
+                markWrite();
+                entry.button.remove();
+                entries.delete(el);
+                return;
+            }
             heal(entry);
             live.buttons.add(entry.button);
             live.targets.add(entry.target);
             return;
         }
 
-        if (root.offsetHeight < MIN_HEIGHT) return;
+        // Too short or not laid out yet: retried on later scans. Ids that already qualified once
+        // skip this test (a message clipped to 100px must not be mistaken for a short one).
+        if (!qualifiedIds.has(id) && root.offsetHeight < MIN_HEIGHT) return;
+
+        if (createdThisScan >= MAX_NEW_PER_SCAN) { needMoreScan = true; return; }
 
         const isUser = role === 'user';
         const innerText = (root.innerText || '').replace(/\u00a0/g, ' ');
@@ -389,63 +445,43 @@
         if (!anchor.parentElement) return;
 
         const resolved = resolveTarget(root, role);
-        const stored = storageGet(id);
+        if (live.targets.has(resolved.node)) return; // already controlled by another entry
+
+        const stored = getState(id);
         entry = {
             id, role, root, anchor,
             target: resolved.node,
-            actionsInside: !resolved.clean,
+            // After MAX_RETARGETS re-resolutions, accept the target as it is (breaks rebuild loops)
+            actionsInside: !resolved.clean || (retargets.get(el) || 0) >= MAX_RETARGETS,
             button: null,
             collapsed: stored === 'collapsed' || (isAutoCollapsed && stored !== 'expanded')
         };
         entry.button = createButton(entry, isUser, isAutoCollapsed);
 
+        markWrite();
         anchor.parentElement.insertBefore(entry.button, anchor);
         entries.set(el, entry);
         applyState(entry);
+        qualifiedIds.add(id);
+        createdThisScan++;
         live.buttons.add(entry.button);
         live.targets.add(entry.target);
     }
 
-    function scan() {
+    function scanBody(targets) {
         const live = { buttons: new Set(), targets: new Set() };
-        const counts = new Map();
+        const counts = new Map(); // occurrence counter for hash-based ids (identical repeated messages)
+        createdThisScan = 0;
+        needMoreScan = false;
 
-        findTargets().forEach(el => {
+        targets.forEach(el => {
             try {
-                const entry = entries.get(el);
                 const role = getRole(el);
-                const sid = stableId(el);
-
-                // ---- NEW fast path ----
-                if (entry && entry.root.isConnected && el.contains(entry.root)) {
-                    if (sid) {
-                        const expectedId = KEY_PREFIX + role + '|' + sid;
-                        if (expectedId !== entry.id) {
-                            if (storageGet(expectedId) === null) {
-                                storageSet(expectedId, entry.collapsed ? 'collapsed' : 'expanded');
-                            }
-                            entry.id = expectedId;
-                        }
-                    }
-                    if (entry.role === 'user' && isEditing(entry.root)) {
-                        live.buttons.add(entry.button);
-                        live.targets.add(entry.target);
-                        return;
-                    }
-                    if (isTargetValid(entry)) {
-                        heal(entry);
-                        live.buttons.add(entry.button);
-                        live.targets.add(entry.target);
-                        return;
-                    }
-                    // target invalid — fall through to slow path
-                }
-
-                // ---- slow path (original logic) ----
                 const root = layoutBox(el);
-                if (!root || !isRendered(root)) return;
+                if (!root || !isRendered(root)) return; // also skips a hidden duplicate copy of the thread
 
                 let base;
+                const sid = stableId(el);
                 if (sid) {
                     base = role + '|' + sid;
                 } else {
@@ -460,68 +496,53 @@
             }
         });
 
-        // Remove orphaned buttons (immediate, as before).
+        // Remove orphaned buttons / stale collapsed classes left by re-rendered nodes
         document.querySelectorAll('.' + BTN_CLASS).forEach(b => {
-            if (!live.buttons.has(b)) b.remove();
+            if (!live.buttons.has(b)) { markWrite(); b.remove(); }
         });
-
-        // NEW: remove collapsed class immediately if disconnected; give
-        // connected orphans a grace period before stripping the class.
         document.querySelectorAll('.' + COLLAPSED_CLASS).forEach(t => {
-            if (live.targets.has(t)) {
-                orphanSince.delete(t);
-                return;
-            }
-            if (!t.isConnected) {
-                t.classList.remove(COLLAPSED_CLASS);
-                orphanSince.delete(t);
-                return;
-            }
-            const now = Date.now();
-            let since = orphanSince.get(t);
-            if (since === undefined) {
-                orphanSince.set(t, now);
-                return;
-            }
-            if (now - since >= STALE_GRACE_MS) {
-                t.classList.remove(COLLAPSED_CLASS);
-                orphanSince.delete(t);
-            }
+            if (!live.targets.has(t)) { markWrite(); t.classList.remove(COLLAPSED_CLASS); }
         });
+    }
+
+    function scan() {
+        const targets = findTargets();
+        const ref = pickReference(targets);
+        withAnchor(ref, () => scanBody(targets));
+        if (needMoreScan) scheduleScan();
     }
 
     // ---------- Scheduling ----------
     let timer = null;
-    let isScrolling = false;
-    let scrollTimer = null;
+    let lastScroll = 0;
+
+    // Never scan in the middle of a scroll gesture: wait until scrolling has been quiet.
+    document.addEventListener('scroll', () => { lastScroll = performance.now(); },
+        { capture: true, passive: true });
+
+    function runScheduled() {
+        timer = null;
+        const wait = SCROLL_IDLE - (performance.now() - lastScroll);
+        if (wait > 0) {
+            timer = setTimeout(runScheduled, wait + 10);
+            return;
+        }
+        scan();
+    }
 
     function scheduleScan() {
         if (timer) return;
-        if (isScrolling) return; // scroll handler will reschedule after settling
-        timer = setTimeout(() => {
-            timer = null;
-            if (isScrolling) return; // will be rescheduled by scroll handler
-            scan();
-        }, SCAN_DELAY);
+        timer = setTimeout(runScheduled, SCAN_DELAY);
     }
-
-    // NEW: pause scans while the user scrolls; resume after settling.
-    window.addEventListener('scroll', () => {
-        isScrolling = true;
-        if (scrollTimer) clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(() => {
-            isScrolling = false;
-            scrollTimer = null;
-            scheduleScan();
-        }, SCROLL_SETTLE_MS);
-    }, { passive: true });
 
     const isOwnNode = n => n.nodeType === 1 && n.classList.contains(BTN_CLASS);
 
     const observer = new MutationObserver(mutations => {
         for (const m of mutations) {
-            for (const n of m.addedNodes) if (!isOwnNode(n)) return scheduleScan();
-            for (const n of m.removedNodes) if (!isOwnNode(n)) return scheduleScan();
+            // Our own button label changes are not page changes
+            if (m.target.nodeType === 1 && m.target.classList.contains(BTN_CLASS)) continue;
+            for (const n of m.addedNodes) if (n.nodeType === 1 && !isOwnNode(n)) return scheduleScan();
+            for (const n of m.removedNodes) if (n.nodeType === 1 && !isOwnNode(n)) return scheduleScan();
         }
     });
 
@@ -529,7 +550,7 @@
     window.cgcmDiagnose = function () {
         const probes = MESSAGE_SELECTOR.split(',').concat([
             '.text-user-message', '[data-turn-key]', '[data-testid]',
-            '[data-message-author-role]', '[data-message-id]'
+            '[data-message-author-role]', '[data-message-id]'   // legacy markers: expected to be 0
         ]);
         console.table(probes.map(sel => ({ selector: sel, count: document.querySelectorAll(sel).length })));
 
@@ -556,25 +577,10 @@
         }));
     };
 
-    function safetyScan() {
-        if (!document.hidden && !isScrolling) {
-            if (typeof requestIdleCallback === 'function') {
-                requestIdleCallback(() => {
-                    if (!document.hidden && !isScrolling) scan();
-                }, { timeout: 2000 });
-            } else {
-                setTimeout(() => {
-                    if (!document.hidden && !isScrolling) scan();
-                }, 0);
-            }
-        }
-        setTimeout(safetyScan, SAFETY_INTERVAL);
-    }
-
     function start() {
         observer.observe(document.body, { childList: true, subtree: true });
         scan();
-        setTimeout(safetyScan, SAFETY_INTERVAL);
+        setInterval(() => { if (!document.hidden) scheduleScan(); }, SAFETY_INTERVAL);
         window.addEventListener('load', scheduleScan);
     }
 
