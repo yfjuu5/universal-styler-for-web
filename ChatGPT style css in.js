@@ -437,6 +437,9 @@ code {
     padding-block:0;
     padding-inline: 0;
 }
+.pt-\[calc\(var\(--thread-content-top-inset\)-var\(--thread-frame-scrollbar-inset\)\)\] {
+    padding-top: 0;
+}
 `;
     // State
     const state = {
