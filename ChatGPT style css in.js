@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         ChatGPT Styler for Berry Browser updated
 // @namespace    http://yourdomain.example
-// @version      2
+// @version      3
 // @description  Enhanced CSS styling for Berry Browser
 // @match        https://chatgpt.com/*
-// @run-at       document-start
+// @run-at       document-end
 // @grant        none
 // ==/UserScript==
 (function () {
@@ -14,7 +14,10 @@
         STYLE_ID: 'chatgpt-enhanced-styles',
         DEBUG_MODE: false,
         RETRY_DELAY: 100,   // used only while waiting for <html> to exist
-        MAX_RETRIES: 50
+        MAX_RETRIES: 50,
+        WATCHDOG_INTERVAL: 1000, // ms between safety re-checks after start
+        WATCHDOG_TICKS: 60,      // ~60 s of safety re-checks, then stop
+        USE_ADOPTED_SHEET: true  // extra copy of the CSS that survives <style> removal
     };
     const USER_CSS = String.raw`
 /* Overall scrollbar dimensions */
@@ -248,7 +251,7 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
     color: #de9500;
     font-size: 19px;
 }
-    
+
 .Title-mwq_Iy[data-d-size=xl] {
     Color: #e10000 !important;
 }
@@ -453,8 +456,12 @@ code {
     // State
     const state = {
         styleElement: null,
-        observer: null,
-        retryCount: 0
+        observer: null,        // watches direct children of <html>
+        observedRoot: null,    // the <html> node the observer is bound to
+        docObserver: null,     // watches <document> itself (html created/replaced)
+        adoptedSheet: null,
+        retryCount: 0,
+        watchdogTicks: 0
     };
     const utils = {
         log(message) {
@@ -478,48 +485,105 @@ code {
             return el;
         },
         // Ensures the element exists, is attached, and is the LAST child of <html>.
+        // Idempotent and safe to call at any time and from any number of triggers.
         ensureLast() {
             const root = document.documentElement;
             if (!root) return false;
-            const el = state.styleElement || this.create();
+            let el = state.styleElement;
+            // Reuse an existing element (e.g. from a duplicate run) or make a new one
+            // if ours belongs to a previous, replaced document.
+            if (!el || el.ownerDocument !== document) {
+                el = document.getElementById(CONFIG.STYLE_ID) || this.create();
+                state.styleElement = el;
+            }
+            // Restore content if something emptied the element.
+            if (el.textContent !== USER_CSS) {
+                el.textContent = USER_CSS;
+            }
             if (root.lastElementChild !== el) {
                 root.appendChild(el); // appendChild moves the node if already attached
                 utils.log('Style element (re)positioned as last child of <html>');
             }
             return true;
+        },
+        // Extra safety net: a constructable stylesheet that lives in the document's
+        // adoptedStyleSheets (not in the DOM tree), so DOM clean-ups during page
+        // hydration cannot remove it. Identical rules; adopted sheets sort after
+        // regular stylesheets, so it wins ties the same way the <style> does.
+        applyAdopted() {
+            if (!CONFIG.USE_ADOPTED_SHEET) return;
+            try {
+                if (typeof CSSStyleSheet !== 'function' || !('adoptedStyleSheets' in document)) return;
+                if (!state.adoptedSheet) {
+                    const sheet = new CSSStyleSheet();
+                    sheet.replaceSync(USER_CSS);
+                    state.adoptedSheet = sheet;
+                }
+                const current = document.adoptedStyleSheets;
+                if (!current.includes(state.adoptedSheet)) {
+                    document.adoptedStyleSheets = [...current, state.adoptedSheet];
+                    utils.log('Adopted stylesheet attached');
+                }
+            } catch (err) {
+                utils.log(`Adopted stylesheet unavailable: ${err && err.message}`);
+            }
         }
     };
-    // Observer: watches ONLY direct children of <html> (no subtree), so it is
-    // cheap and does not fire during chat streaming. It fires when <body> is
-    // inserted by the parser, or if something is appended after / removes our element.
+    // Observers.
+    // 1) rootObserver: watches ONLY direct children of <html> (no subtree), so it
+    //    is cheap and does not fire during chat streaming. It fires when <body> is
+    //    inserted by the parser, or if something is appended after / removes our element.
+    // 2) docObserver: watches ONLY direct children of the document, so it notices
+    //    when <html> is first created or replaced (common during cold start) and
+    //    re-attaches everything.
     const observerManager = {
         setup() {
-            this.cleanup();
             const root = document.documentElement;
-            if (!root) return;
-            state.observer = new MutationObserver(() => {
-                styleManager.ensureLast();
-            });
-            state.observer.observe(root, { childList: true });
-            utils.log('Observer started');
+            if (root && state.observedRoot !== root) {
+                this.cleanupRoot();
+                state.observer = new MutationObserver(() => {
+                    styleManager.ensureLast();
+                });
+                state.observer.observe(root, { childList: true });
+                state.observedRoot = root;
+                utils.log('Root observer started');
+            }
+            if (!state.docObserver) {
+                state.docObserver = new MutationObserver(() => {
+                    app.attach();
+                });
+                state.docObserver.observe(document, { childList: true });
+                utils.log('Document observer started');
+            }
         },
-        cleanup() {
+        cleanupRoot() {
             if (state.observer) {
                 state.observer.disconnect();
                 state.observer = null;
             }
+            state.observedRoot = null;
         }
     };
     // Main initialization
     const app = {
+        // One idempotent "make everything right" step, used by every trigger.
+        attach() {
+            if (!styleManager.ensureLast()) return false;
+            styleManager.applyAdopted();
+            observerManager.setup();
+            return true;
+        },
         init() {
             utils.log('Initializing ChatGPT Styler');
+            // Observe the document first so we cannot miss <html> appearing.
+            observerManager.setup();
             this.applyWithRetry();
+            this.bindLifecycleEvents();
+            this.startWatchdog();
         },
         applyWithRetry() {
-            if (styleManager.ensureLast()) {
+            if (this.attach()) {
                 state.retryCount = 0;
-                observerManager.setup();
                 return;
             }
             state.retryCount++;
@@ -528,9 +592,32 @@ code {
             } else {
                 utils.log('Max retries reached, giving up');
             }
+        },
+        // Re-assert on browser lifecycle moments. After a cold start the page is
+        // often restored/shown only after the first load, so these matter.
+        bindLifecycleEvents() {
+            const handler = () => app.attach();
+            document.addEventListener('readystatechange', handler);
+            document.addEventListener('DOMContentLoaded', handler);
+            document.addEventListener('visibilitychange', handler);
+            window.addEventListener('load', handler);
+            window.addEventListener('pageshow', handler);
+            window.addEventListener('focus', handler);
+        },
+        // Cheap, bounded safety net for the first minute after launch.
+        startWatchdog() {
+            const timer = setInterval(() => {
+                app.attach();
+                state.watchdogTicks++;
+                if (state.watchdogTicks >= CONFIG.WATCHDOG_TICKS) {
+                    clearInterval(timer);
+                    utils.log('Watchdog finished');
+                }
+            }, CONFIG.WATCHDOG_INTERVAL);
         }
     };
-    // Start immediately (@run-at document-start). No DOMContentLoaded wait is
-    // needed: the style lives on <html>, which exists from the start.
+    // Start immediately. The logic is timing-agnostic: it works whether the script
+    // runs at document-start, document-end or document-idle, and whether or not
+    // <html> exists yet.
     app.init();
 })();
