@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ChatGPT Collapse and Expand Messages
 // @namespace    https://github.com/ChinaGodMan/UserScripts
-// @version      1.6.0
-// @description  Add "Collapse or Expand" buttons to ChatGPT messages. Auto-collapse specific user phrases. Keeps native user-message controls visible; user messages expand while being edited. Stable (no collapse/expand loops) and scroll-friendly.
+// @version      1.5.1
+// @description  Add "Collapse or Expand" buttons to ChatGPT messages. Auto-collapse specific user phrases. Keeps native user-message controls visible; user messages expand while being edited. Stabilized for Berry Browser (no feedback loops, smoother scrolling).
 // @match        https://chatgpt.com/*
 // @run-at       document-idle
 // @grant        none
@@ -38,10 +38,6 @@
     const MIN_HEIGHT = 200;        // messages shorter than this get no button (as in the original)
     const SCAN_DELAY = 200;        // ms: at most one scan per interval while the DOM is busy
     const SAFETY_INTERVAL = 3000;  // ms: slow safety sweep
-    const SCROLL_QUIET = 180;      // ms: scans wait until scrolling has been quiet this long
-    const SCROLL_MAX_DEFER = 1500; // ms: but never postpone a pending scan longer than this
-    const HEAL_WINDOW = 3000;      // circuit breaker: max HEAL_MAX corrections per entry per window
-    const HEAL_MAX = 6;
     const KEY_PREFIX = 'cgcm:v2:';
     const BTN_CLASS = 'cgcm-toggle-button';
     const COLLAPSED_CLASS = 'cgcm-collapsed';
@@ -62,12 +58,23 @@
     // Controls that indicate a user message is being edited (structural: no labels, no class names).
     const EDITOR_SELECTOR = 'textarea, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
 
-    // element -> { id, role, root, target, anchor, button, actionsInside, heals }
+    // element -> { id, role, root, target, anchor, button, collapsed, actionsInside }
     const entries = new WeakMap();
 
-    // Single source of truth for collapsed state: message id -> boolean.
-    // Entries never keep their own copy, so two entries can never disagree.
-    const states = new Map();
+    // Suppress scans after our own writes / user clicks and while the user is scrolling.
+    // This breaks the apply → ChatGPT re-render → scan → apply feedback loop and
+    // prevents layout thrashing that moves the scrollbar.
+    let suppressUntil = 0;
+    let scrolling = false;
+    let scrollTimer = null;
+
+    function shouldSuppress() {
+        return Date.now() < suppressUntil || scrolling;
+    }
+
+    function bumpSuppress(ms) {
+        suppressUntil = Math.max(suppressUntil, Date.now() + ms);
+    }
 
     // ---------- Styles ----------
     const style = document.createElement('style');
@@ -99,7 +106,6 @@
         .${BTN_CLASS} {
             display: block;
             text-align: center;
-            overflow-anchor: none; /* never let the browser pick our button as its scroll anchor */
         }
     `;
     (document.head || document.documentElement).appendChild(style);
@@ -211,14 +217,6 @@
         return anchor;
     }
 
-    // ---------- State (single source of truth) ----------
-    const isCollapsed = entry => states.get(entry.id) === true;
-
-    function setState(id, collapsed) {
-        states.set(id, collapsed);
-        storageSet(id, collapsed ? 'collapsed' : 'expanded');
-    }
-
     // ---------- User messages: content vs. native controls vs. edit mode ----------
 
     // Native controls = buttons (outside code blocks). No labels or class names involved.
@@ -258,13 +256,11 @@
         return !(entry.role === 'user' && !entry.actionsInside && hasButtons(entry.target));
     }
 
-    // ---------- Buttons and state application (DOM writes) ----------
+    // ---------- Buttons and state ----------
     function applyState(entry) {
-        const collapsed = isCollapsed(entry);
-        entry.target.classList.toggle(COLLAPSED_CLASS, collapsed);
+        entry.target.classList.toggle(COLLAPSED_CLASS, entry.collapsed);
         entry.target.classList.toggle('cgcm-user', entry.role === 'user');
-        const label = collapsed ? 'Expand' : 'Collapse';
-        if (entry.button.textContent !== label) entry.button.textContent = label;
+        entry.button.textContent = entry.collapsed ? 'Expand' : 'Collapse';
     }
 
     function createButton(entry, isUser, isAutoCollapsed) {
@@ -283,10 +279,11 @@
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            e.stopImmediatePropagation();
-            setState(entry.id, !isCollapsed(entry));
+            // Prevent the height change from immediately re-triggering a scan/re-render loop.
+            bumpSuppress(500);
+            entry.collapsed = !entry.collapsed;
             applyState(entry);
-            scheduleScan(); // other entries sharing this id (if any) converge on the same state
+            storageSet(entry.id, entry.collapsed ? 'collapsed' : 'expanded');
         });
         return btn;
     }
@@ -296,37 +293,25 @@
         entry.target.classList.remove(COLLAPSED_CLASS);
     }
 
-    // Circuit breaker: a correction loop (fighting re-render, etc.) can never run away.
-    function healAllowed(entry) {
-        const now = Date.now();
-        entry.heals = (entry.heals || []).filter(t => now - t < HEAL_WINDOW);
-        if (entry.heals.length >= HEAL_MAX) return false;
-        entry.heals.push(now);
-        return true;
-    }
-
-    // Read phase: decide whether anything must be repaired. Returns a write thunk or null.
-    function planHeal(entry) {
+    // Repair anything a re-render may have undone (button removed/moved, class wiped).
+    function heal(entry) {
         if (!entry.anchor.isConnected || !entry.anchor.contains(entry.root)) {
             entry.anchor = pickAnchor(entry.root);
         }
         const parent = entry.anchor.parentElement;
-        const needMove = !!parent &&
-            (!entry.button.isConnected || entry.button.nextElementSibling !== entry.anchor);
-        const collapsed = isCollapsed(entry);
-        const label = collapsed ? 'Expand' : 'Collapse';
-        const needState = entry.target.classList.contains(COLLAPSED_CLASS) !== collapsed ||
-            entry.button.textContent !== label;
-        if (!needMove && !needState) return null;
-        if (!healAllowed(entry)) return null;
-        return () => {
-            if (needMove) parent.insertBefore(entry.button, entry.anchor);
-            if (needState) applyState(entry);
-        };
+        if (parent && (!entry.button.isConnected || entry.button.nextElementSibling !== entry.anchor)) {
+            bumpSuppress(150);
+            parent.insertBefore(entry.button, entry.anchor);
+        }
+        const label = entry.collapsed ? 'Expand' : 'Collapse';
+        if (entry.target.classList.contains(COLLAPSED_CLASS) !== entry.collapsed ||
+            entry.button.textContent !== label) {
+            applyState(entry);
+        }
     }
 
-    // ---------- Core (read phase; DOM writes are queued in `writes`) ----------
-    function processElement(el, root, role, id, live, writes) {
+    // ---------- Core ----------
+    function processElement(el, root, role, id, live) {
         let entry = entries.get(el);
 
         // User message being edited: change nothing (the CSS above keeps the editor unclipped)
@@ -339,123 +324,68 @@
             return;
         }
 
-        // Node reused for another message, or inner box replaced: rebuild (rare, done immediately).
-        if (entry && (entry.id !== id || entry.root !== root)) {
+        if (entry && (entry.id !== id || entry.root !== root || !isTargetValid(entry))) {
+            // node reused for another message, inner box replaced, or native controls ended up inside the target
             teardown(entry);
             entries.delete(el);
             entry = null;
         }
 
         if (entry) {
-            // Only the content target became invalid: move to the new target in place, keep the button.
-            if (!isTargetValid(entry)) {
-                const resolved = resolveTarget(root, role);
-                const oldTarget = entry.target;
-                entry.target = resolved.node;
-                entry.actionsInside = !resolved.clean;
-                writes.push(() => {
-                    if (oldTarget !== entry.target) oldTarget.classList.remove(COLLAPSED_CLASS);
-                    applyState(entry);
-                });
-            }
-            // Another entry already owns this target in this scan: drop this duplicate, leave the class alone.
-            if (live.targets.has(entry.target)) {
-                const dup = entry;
-                entries.delete(el);
-                writes.push(() => dup.button.remove());
-                return;
-            }
-            const fix = planHeal(entry);
-            if (fix) writes.push(fix);
+            heal(entry);
             live.buttons.add(entry.button);
             live.targets.add(entry.target);
             return;
         }
 
-        if (root.offsetHeight < MIN_HEIGHT) return; // too short or not laid out yet: retried on later scans
-
+        // Compute auto-collapse / stored state BEFORE the height gate so that a
+        // just-re-rendered message that still carries a stored "collapsed" preference
+        // (or matches an auto-collapse phrase) is always restored, even if the
+        // temporary measured height is below MIN_HEIGHT. This stops the
+        // create → cleanup → create oscillation that produced endless collapse/expand.
         const isUser = role === 'user';
         const innerText = (root.innerText || '').replace(/\u00a0/g, ' ');
         const rawText = (root.textContent || '').replace(/\u00a0/g, ' ');
         const isAutoCollapsed = isUser &&
             autoCollapsePhrases.some(p => innerText.includes(p) || rawText.includes(p));
+        const stored = storageGet(id);
+
+        if (root.offsetHeight < MIN_HEIGHT && stored !== 'collapsed' && !isAutoCollapsed) {
+            return; // truly short and never collapsed → no button
+        }
 
         const anchor = pickAnchor(root);
         if (!anchor.parentElement) return;
 
         const resolved = resolveTarget(root, role);
-        if (live.targets.has(resolved.node)) return; // target already owned by another entry
-
-        if (!states.has(id)) {
-            const stored = storageGet(id);
-            states.set(id, stored === 'collapsed' || (isAutoCollapsed && stored !== 'expanded'));
-        }
         entry = {
             id, role, root, anchor,
             target: resolved.node,
             actionsInside: !resolved.clean,
             button: null,
-            heals: []
+            collapsed: stored === 'collapsed' || (isAutoCollapsed && stored !== 'expanded')
         };
         entry.button = createButton(entry, isUser, isAutoCollapsed);
+
+        bumpSuppress(150);
+        anchor.parentElement.insertBefore(entry.button, anchor);
         entries.set(el, entry);
+        applyState(entry);
         live.buttons.add(entry.button);
         live.targets.add(entry.target);
-
-        const newEntry = entry;
-        writes.push(() => {
-            if (!newEntry.anchor.parentElement) return;
-            newEntry.anchor.parentElement.insertBefore(newEntry.button, newEntry.anchor);
-            applyState(newEntry);
-        });
     }
 
-    // ---------- Scroll stability ----------
-    let scroller = null;
-
-    function findScroller(from) {
-        if (scroller && scroller.isConnected && from && scroller.contains(from)) return scroller;
-        for (let n = from && from.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
-            const oy = getComputedStyle(n).overflowY;
-            if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && n.scrollHeight > n.clientHeight + 1) {
-                scroller = n;
-                return n;
-            }
-        }
-        scroller = null; // do not cache the document fallback
-        return document.scrollingElement || document.documentElement;
-    }
-
-    // First message that is at least partly inside the viewport, and where it is right now.
-    function viewportAnchor(roots, sc) {
-        const topBound = (sc === document.scrollingElement || sc === document.documentElement)
-            ? 0 : sc.getBoundingClientRect().top;
-        for (const el of roots) {
-            const r = el.getBoundingClientRect();
-            if (r.height > 0 && r.bottom > topBound + 1) return { el, top: r.top };
-        }
-        return null;
-    }
-
-    function scrollBy(sc, d) {
-        const top = sc.scrollTop + d;
-        try { sc.scrollTo({ top, behavior: 'instant' }); } catch (e) { sc.scrollTop = top; }
-    }
-
-    // ---------- Scan ----------
     function scan() {
+        if (shouldSuppress()) return;
+
         const live = { buttons: new Set(), targets: new Set() };
         const counts = new Map(); // occurrence counter for hash-based ids (identical repeated messages)
-        const writes = [];
-        const roots = [];
 
-        // READ PHASE (no DOM writes except rare teardowns)
         findTargets().forEach(el => {
             try {
                 const role = getRole(el);
                 const root = layoutBox(el);
                 if (!root || !isRendered(root)) return; // also skips a hidden duplicate copy of the thread
-                roots.push(root);
 
                 let base;
                 const sid = stableId(el);
@@ -467,78 +397,49 @@
                     counts.set(base, n + 1);
                     base += '#' + n;
                 }
-                processElement(el, root, role, KEY_PREFIX + base, live, writes);
+                processElement(el, root, role, KEY_PREFIX + base, live);
             } catch (err) {
                 console.warn('[CGCM] error while processing a message', err);
             }
         });
 
-        // Orphaned buttons / stale collapsed classes left by re-rendered nodes
-        const staleButtons = Array.from(document.querySelectorAll('.' + BTN_CLASS)).filter(b => !live.buttons.has(b));
-        const staleTargets = Array.from(document.querySelectorAll('.' + COLLAPSED_CLASS)).filter(t => !live.targets.has(t));
-
-        if (!writes.length && !staleButtons.length && !staleTargets.length) return; // nothing to change
-
-        // Remember what the user is looking at, so changes above it cannot move it.
-        let sc = null, anchorInfo = null;
-        if (roots.length) {
-            sc = findScroller(roots[0]);
-            if (sc && sc.scrollTop > 1) anchorInfo = viewportAnchor(roots, sc);
-        }
-
-        // WRITE PHASE (one batch => at most one layout pass)
-        writes.forEach(fn => { try { fn(); } catch (err) { console.warn('[CGCM] write error', err); } });
-        staleButtons.forEach(b => b.remove());
-        staleTargets.forEach(t => t.classList.remove(COLLAPSED_CLASS));
-
-        // Compensate any shift that the browser's own scroll anchoring did not absorb.
-        if (anchorInfo && anchorInfo.el.isConnected) {
-            const d = anchorInfo.el.getBoundingClientRect().top - anchorInfo.top;
-            if (Math.abs(d) >= 1) scrollBy(sc, d);
-        }
-
-        // Discard mutation records produced by this scan itself (prevents self-triggered rescans).
-        observer.takeRecords();
+        // Remove orphaned buttons / stale collapsed classes left by re-rendered nodes
+        document.querySelectorAll('.' + BTN_CLASS).forEach(b => { if (!live.buttons.has(b)) b.remove(); });
+        document.querySelectorAll('.' + COLLAPSED_CLASS).forEach(t => {
+            if (!live.targets.has(t)) t.classList.remove(COLLAPSED_CLASS);
+        });
     }
 
     // ---------- Scheduling ----------
     let timer = null;
-    let deferredSince = 0;
-    let lastScroll = 0;
-
-    function noteScroll() { lastScroll = performance.now(); }
-
-    function runScheduled() {
-        timer = null;
-        const now = performance.now();
-        const quiet = now - lastScroll;
-        if (quiet < SCROLL_QUIET) {
-            if (!deferredSince) deferredSince = now;
-            if (now - deferredSince < SCROLL_MAX_DEFER) {
-                scheduleScan(SCROLL_QUIET - quiet + 20); // still scrolling: try again shortly
-                return;
-            }
-        }
-        deferredSince = 0;
-        scan();
+    function scheduleScan() {
+        if (timer || shouldSuppress()) return;
+        timer = setTimeout(() => {
+            timer = null;
+            if (!shouldSuppress()) scan();
+        }, SCAN_DELAY);
     }
 
-    function scheduleScan(delay) {
-        if (timer) return;
-        timer = setTimeout(runScheduled, typeof delay === 'number' ? delay : SCAN_DELAY);
-    }
-
-    // Only real element additions/removals matter. Text-node changes (streaming text, our own
-    // button label) and our own button are ignored, so the script can never retrigger itself.
-    const isOwnNode = n => n.nodeType === 1 && n.classList.contains(BTN_CLASS);
-    const isRelevantNode = n => n.nodeType === 1 && !isOwnNode(n);
+    const isOwnNode = n => n.nodeType === 1 && n.classList && n.classList.contains(BTN_CLASS);
 
     const observer = new MutationObserver(mutations => {
+        if (shouldSuppress()) return;
         for (const m of mutations) {
-            for (const n of m.addedNodes) if (isRelevantNode(n)) return scheduleScan();
-            for (const n of m.removedNodes) if (isRelevantNode(n)) return scheduleScan();
+            for (const n of m.addedNodes) if (!isOwnNode(n)) return scheduleScan();
+            for (const n of m.removedNodes) if (!isOwnNode(n)) return scheduleScan();
         }
     });
+
+    // Pause scanning while the user is scrolling; resume and catch up after settle.
+    // This removes the layout thrashing that caused unexpected scrollbar movement.
+    function onScroll() {
+        scrolling = true;
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+            scrolling = false;
+            scheduleScan();
+        }, 200);
+    }
 
     // ---------- Diagnostics: run cgcmDiagnose() in the DevTools console ----------
     window.cgcmDiagnose = function () {
@@ -569,24 +470,16 @@
                 editing: isEditing(root)
             };
         }));
-
-        const first = findTargets().map(layoutBox).find(Boolean);
-        const sc = first ? findScroller(first) : null;
-        console.log('[CGCM] scroll container:', sc,
-            sc ? { scrollTop: sc.scrollTop, scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight } : '');
-        console.log('[CGCM] buttons: ' + document.querySelectorAll('.' + BTN_CLASS).length +
-            ', collapsed targets: ' + document.querySelectorAll('.' + COLLAPSED_CLASS).length +
-            ', tracked states: ' + states.size);
     };
 
     function start() {
         observer.observe(document.body, { childList: true, subtree: true });
-        window.addEventListener('scroll', noteScroll, { capture: true, passive: true });
-        window.addEventListener('wheel', noteScroll, { capture: true, passive: true });
-        window.addEventListener('touchmove', noteScroll, { capture: true, passive: true });
+        window.addEventListener('scroll', onScroll, { passive: true, capture: true });
         scan();
-        setInterval(() => { if (!document.hidden) scheduleScan(0); }, SAFETY_INTERVAL);
-        window.addEventListener('load', () => scheduleScan());
+        setInterval(() => {
+            if (!document.hidden && !shouldSuppress()) scan();
+        }, SAFETY_INTERVAL);
+        window.addEventListener('load', scheduleScan);
     }
 
     if (document.body) {
