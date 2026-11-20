@@ -165,7 +165,7 @@ h2.TextBase-hXhSqg.Title-HRvkwB{
     Color: #e58200;
 }
 .pt-\(--thread-content-top-inset\) {
-    padding-top: 4px;
+    padding-top: 0;
 }
 /* .contents .flex-col {
     border: 1px #980091 solid;
