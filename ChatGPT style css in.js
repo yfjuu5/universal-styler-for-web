@@ -56,6 +56,7 @@
 ,.group\/titlebar
 ,.banner-cPVvz7
 ,.self-start
+,.transition-opacity
 {
     display: none !important;
 }
